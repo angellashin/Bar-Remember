@@ -177,8 +177,8 @@ struct IconColorPickerSnapshotTests {
       Text("앱 테마")
         .font(.caption)
         .foregroundStyle(BarRememberPalette.secondaryText)
-      ThemePicker(selection: .constant(BarRememberTheme.frost.rawValue))
-      Text("프로스트와 미드나이트는 반투명 material 위에 색을 더합니다.")
+      ThemePicker(selection: .constant(BarRememberTheme.glass.rawValue))
+      Text("Glass와 미드나이트는 반투명 material 위에 색을 더합니다.")
         .font(.caption2)
         .foregroundStyle(BarRememberPalette.mutedText)
     }

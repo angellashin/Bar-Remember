@@ -149,9 +149,10 @@ struct ReminderModelsTests {
 
   @Test func themeOptionsHaveStableIdentifiersAndFallback() {
     #expect(BarRememberTheme.allCases.map(\.rawValue) == [
-      "system", "frost", "midnight", "paper",
+      "system", "glass", "midnight", "paper",
     ])
-    #expect(BarRememberTheme.resolve("frost") == .frost)
+    #expect(BarRememberTheme.resolve("glass") == .glass)
+    #expect(BarRememberTheme.resolve("frost") == .glass)
     #expect(BarRememberTheme.resolve("unknown") == .system)
   }
 

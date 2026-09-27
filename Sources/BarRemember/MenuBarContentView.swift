@@ -61,6 +61,13 @@ struct MenuBarContentView: View {
     .frame(width: 380, height: 520)
     .background(BarRememberPalette.popoverOverlay)
     .background(.ultraThinMaterial)
+    .overlay {
+      if BarRememberTheme.resolve(themeRawValue) == .glass {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .stroke(.white.opacity(0.28), lineWidth: 0.8)
+          .allowsHitTesting(false)
+      }
+    }
     .task {
       if store.section(withID: selectedSectionRawValue) == nil {
         selectedSectionRawValue = store.sections.first?.id ?? ReminderSection.tasksID
@@ -1486,7 +1493,7 @@ private struct ListSelectionView: View {
               .font(.caption)
               .foregroundStyle(BarRememberPalette.secondaryText)
             ThemePicker(selection: $themeRawValue)
-            Text("프로스트와 미드나이트는 반투명 material 위에 색을 더합니다.")
+              Text("Glass와 미드나이트는 반투명 material 위에 색을 더합니다.")
               .font(.caption2)
               .foregroundStyle(BarRememberPalette.mutedText)
           }
@@ -1673,7 +1680,7 @@ struct ThemePicker: View {
   var body: some View {
     HStack(spacing: 8) {
       ForEach(BarRememberTheme.allCases) { theme in
-        let isSelected = theme.rawValue == selection
+        let isSelected = theme == BarRememberTheme.resolve(selection)
 
         Button {
           selection = theme.rawValue

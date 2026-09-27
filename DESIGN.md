@@ -46,7 +46,7 @@
 - Tradeoffs: 공간 이름 변경은 BarRemember의 분류명만 바꾸며 연결된 Apple Reminders 목록 이름은 예기치 않게 변경하지 않는다.
 
 ## Visual language
-- Color: 완료 원은 기본 인디고를 포함한 고대비 6색 프리셋. 전체 앱 테마는 네 가지다: `시스템`(기본 macOS material), `Glass`(창 뒤가 비치는 네이티브 popover material), `미드나이트`(반투명 네이비 글래스), `페이퍼`(따뜻하고 불투명한 표면). Glass는 투명한 팝오버 창, `NSVisualEffectView(.popover, .behindWindow)`, 10–20% 중립 tint, 흐린 보라·청록 배경광, 얇은 하이라이트 테두리로 유리 깊이를 만들되 텍스트 대비를 우선한다. 각 프리셋은 밝은·어두운 모드 변형과 독립적인 텍스트·표면·강조색을 가진다.
+- Color: 완료 원은 기본 인디고를 포함한 고대비 6색 프리셋. 전체 앱 테마는 네 가지다: `시스템`(기본 macOS material), `Glass`(투명한 팝오버 위에 색이 번지는 네이티브 popover material), `미드나이트`(반투명 네이비 글래스), `페이퍼`(따뜻하고 불투명한 표면). Glass는 투명한 팝오버 창, vibrant color field, `NSVisualEffectView(.popover, .withinWindow)` blur, 15% translucent white tint, 1px 하이라이트 테두리로 유리 깊이를 만들되 텍스트 대비를 우선한다. 각 프리셋은 밝은·어두운 모드 변형과 독립적인 텍스트·표면·강조색을 가진다.
 - Typography: macOS 시스템 서체와 기존 headline/caption 위계를 유지한다.
 - Spacing/layout rhythm: 4–16pt 기존 리듬, 설정 그룹 간 16pt 간격
 - Shape/radius/elevation: 빠른 추가는 10pt 연속형 컨테이너, 항목은 배경색 카드 대신 넉넉한 행 간격과 1px 구분선 중심으로 구성한다. 색상 선택은 원형 스와치. 날짜 필드와 보조 버튼은 macOS 시스템 컨트롤 크기·모양을 유지한다.

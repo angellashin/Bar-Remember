@@ -437,29 +437,44 @@ struct MenuBarContentView: View {
 private struct GlassPopoverBackground: View {
   var body: some View {
     ZStack {
-      GlassMaterialView()
-
-      // A quiet, out-of-focus color field gives the transparent surface depth
-      // without turning the menu-bar popover into a decorative dashboard.
+      // Glass needs a visible environment behind the blur. These restrained
+      // color fields provide depth even when the desktop behind the popover is
+      // a flat wallpaper.
       RadialGradient(
         colors: [
-          Color(red: 0.34, green: 0.62, blue: 0.78, opacity: 0.22),
+          Color(red: 0.05, green: 0.50, blue: 0.88, opacity: 0.42),
           .clear,
         ],
         center: .topLeading,
         startRadius: 8,
-        endRadius: 270
+        endRadius: 250
       )
+      .blur(radius: 18)
       RadialGradient(
         colors: [
-          Color(red: 0.42, green: 0.34, blue: 0.68, opacity: 0.14),
+          Color(red: 0.55, green: 0.08, blue: 0.78, opacity: 0.34),
+          .clear,
+        ],
+        center: .bottomLeading,
+        startRadius: 12,
+        endRadius: 280
+      )
+      .blur(radius: 22)
+      RadialGradient(
+        colors: [
+          Color(red: 0.02, green: 0.72, blue: 0.62, opacity: 0.28),
           .clear,
         ],
         center: .bottomTrailing,
-        startRadius: 12,
-        endRadius: 300
+        startRadius: 10,
+        endRadius: 230
       )
-      Color.white.opacity(0.06)
+      .blur(radius: 20)
+
+      // Blur the vibrant layer, then add the translucent white film that sells
+      // the physical glass surface and keeps text legible.
+      GlassMaterialView()
+      Color.white.opacity(0.15)
     }
     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
   }
@@ -469,7 +484,7 @@ private struct GlassMaterialView: NSViewRepresentable {
   func makeNSView(context: Context) -> NSVisualEffectView {
     let view = NSVisualEffectView()
     view.material = .popover
-    view.blendingMode = .behindWindow
+    view.blendingMode = .withinWindow
     view.state = .active
     view.wantsLayer = true
     view.layer?.backgroundColor = NSColor.clear.cgColor
@@ -478,7 +493,7 @@ private struct GlassMaterialView: NSViewRepresentable {
 
   func updateNSView(_ view: NSVisualEffectView, context: Context) {
     view.material = .popover
-    view.blendingMode = .behindWindow
+    view.blendingMode = .withinWindow
     view.state = .active
   }
 }

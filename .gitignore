@@ -1,0 +1,20 @@
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Local build outputs
+dist/
+outputs/
+
+# Local agent/runtime state
+.omx/
+
+# Xcode user state
+*.xcuserdata/
+*.xcuserstate
+
+# macOS app bundles and archives generated locally
+*.app/
+*.zip

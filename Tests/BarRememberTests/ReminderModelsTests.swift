@@ -81,6 +81,64 @@ struct ReminderModelsTests {
     #expect(configuration.listSectionAssignments["shared"] == "tasks")
   }
 
+  @Test func emptySectionAssignmentsRecoverLegacyTaskSelection() {
+    let lists = [
+      ReminderListInfo(id: "legacy-inbox", title: "미리 알림", tint: .accent, canModify: true),
+      ReminderListInfo(id: "applications", title: "공고", tint: .accent, canModify: true),
+    ]
+
+    let assignments = ReminderListAssignmentPolicy.reconciledAssignments(
+      current: [:],
+      sections: [.tasks, ReminderSection(id: "jobs", title: "공고")],
+      availableLists: lists,
+      legacyTaskListIDs: ["legacy-inbox"],
+      defaultID: nil,
+      hasConfiguredSelection: true
+    )
+
+    #expect(assignments["legacy-inbox"] == ReminderSection.tasksID)
+    #expect(assignments["applications"] == "jobs")
+  }
+
+  @Test func staleListIdentifiersReconnectByMatchingSectionTitle() {
+    let lists = [
+      ReminderListInfo(id: "new-tasks-id", title: "할 일", tint: .accent, canModify: true),
+      ReminderListInfo(id: "new-jobs-id", title: "공고", tint: .accent, canModify: true),
+    ]
+
+    let assignments = ReminderListAssignmentPolicy.reconciledAssignments(
+      current: ["old-tasks-id": ReminderSection.tasksID, "old-jobs-id": "jobs"],
+      sections: [.tasks, ReminderSection(id: "jobs", title: "공고")],
+      availableLists: lists,
+      legacyTaskListIDs: [],
+      defaultID: nil,
+      hasConfiguredSelection: true
+    )
+
+    #expect(assignments["new-tasks-id"] == ReminderSection.tasksID)
+    #expect(assignments["new-jobs-id"] == "jobs")
+    #expect(assignments["old-tasks-id"] == nil)
+    #expect(assignments["old-jobs-id"] == nil)
+  }
+
+  @Test func staleLegacyTaskSelectionFallsBackToTheDefaultList() {
+    let lists = [
+      ReminderListInfo(id: "default-list", title: "미리 알림", tint: .accent, canModify: true),
+      ReminderListInfo(id: "other-list", title: "업무", tint: .accent, canModify: true),
+    ]
+
+    let assignments = ReminderListAssignmentPolicy.reconciledAssignments(
+      current: [:],
+      sections: [.tasks],
+      availableLists: lists,
+      legacyTaskListIDs: ["stale-legacy-id"],
+      defaultID: "default-list",
+      hasConfiguredSelection: true
+    )
+
+    #expect(assignments == ["default-list": ReminderSection.tasksID])
+  }
+
   @Test func reminderTitleTrimsOuterWhitespace() {
     #expect(ReminderTitlePolicy.normalized("  회의 자료 정리  \n") == "회의 자료 정리")
   }

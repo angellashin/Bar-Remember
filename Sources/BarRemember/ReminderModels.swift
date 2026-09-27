@@ -118,6 +118,74 @@ struct ReminderListInfo: Identifiable, Hashable, Sendable {
   let canModify: Bool
 }
 
+enum ReminderListAssignmentPolicy {
+  static func reconciledAssignments(
+    current assignments: [String: String],
+    sections: [ReminderSection],
+    availableLists: [ReminderListInfo],
+    legacyTaskListIDs: Set<String>,
+    defaultID: String?,
+    hasConfiguredSelection: Bool
+  ) -> [String: String] {
+    let validSectionIDs = Set(sections.map(\.id))
+    let availableIDs = Set(availableLists.map(\.id))
+    var reconciledAssignments = assignments.filter {
+      availableIDs.contains($0.key) && validSectionIDs.contains($0.value)
+    }
+
+    let savedTaskListIDs = Set(
+      assignments.compactMap { listID, sectionID in
+        sectionID == ReminderSection.tasksID ? listID : nil
+      }
+    ).union(legacyTaskListIDs)
+    var reconciledTaskListIDs = ListSelectionPolicy.reconciledSelection(
+      savedIDs: savedTaskListIDs,
+      availableIDs: availableIDs,
+      defaultID: defaultID,
+      hasConfiguredSelection: hasConfiguredSelection || !legacyTaskListIDs.isEmpty
+    )
+    if reconciledTaskListIDs.isEmpty && !legacyTaskListIDs.isEmpty {
+      reconciledTaskListIDs = ListSelectionPolicy.reconciledSelection(
+        savedIDs: [],
+        availableIDs: availableIDs,
+        defaultID: defaultID,
+        hasConfiguredSelection: false
+      )
+    }
+
+    reconciledAssignments = reconciledAssignments.filter {
+      $0.value != ReminderSection.tasksID
+    }
+    for listID in reconciledTaskListIDs {
+      reconciledAssignments[listID] = ReminderSection.tasksID
+    }
+
+    for section in sections where !reconciledAssignments.values.contains(section.id) {
+      guard let matchingList = firstUnassignedList(
+        matching: section.title,
+        in: availableLists,
+        assignedIDs: Set(reconciledAssignments.keys)
+      ) else {
+        continue
+      }
+      reconciledAssignments[matchingList.id] = section.id
+    }
+
+    return reconciledAssignments
+  }
+
+  private static func firstUnassignedList(
+    matching title: String,
+    in lists: [ReminderListInfo],
+    assignedIDs: Set<String>
+  ) -> ReminderListInfo? {
+    lists.first {
+      !assignedIDs.contains($0.id)
+        && $0.title.localizedCaseInsensitiveCompare(title) == .orderedSame
+    }
+  }
+}
+
 struct ReminderItemSnapshot: Identifiable, Equatable, Sendable {
   let id: String
   let title: String

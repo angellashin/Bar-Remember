@@ -142,27 +142,19 @@ final class ReminderStore: ObservableObject {
     }
     lists = snapshots
 
-    let availableIDs = Set(snapshots.map(\.id))
     let defaultID = eventStore.defaultCalendarForNewReminders()?.calendarIdentifier
     let hasConfiguredSelection = defaults.bool(forKey: hasConfiguredSelectionKey)
-    let taskListIDs = selectedListIDs(for: .tasks)
-    let reconciledTaskListIDs = ListSelectionPolicy.reconciledSelection(
-      savedIDs: taskListIDs,
-      availableIDs: availableIDs,
+    let legacyTaskListIDs = Set(
+      defaults.stringArray(forKey: Self.legacySelectedListIDsKey) ?? []
+    )
+    let reconciledAssignments = ReminderListAssignmentPolicy.reconciledAssignments(
+      current: listSectionAssignments,
+      sections: sections,
+      availableLists: snapshots,
+      legacyTaskListIDs: legacyTaskListIDs,
       defaultID: defaultID,
       hasConfiguredSelection: hasConfiguredSelection
     )
-
-    let validSectionIDs = Set(sections.map(\.id))
-    var reconciledAssignments = listSectionAssignments.filter {
-      availableIDs.contains($0.key) && validSectionIDs.contains($0.value)
-    }
-    for listID in taskListIDs {
-      reconciledAssignments.removeValue(forKey: listID)
-    }
-    for listID in reconciledTaskListIDs {
-      reconciledAssignments[listID] = ReminderSection.tasksID
-    }
 
     if reconciledAssignments != listSectionAssignments {
       listSectionAssignments = reconciledAssignments

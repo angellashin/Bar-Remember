@@ -64,7 +64,7 @@ enum BarRememberTheme: String, CaseIterable, Identifiable {
   var swatch: Color {
     switch self {
     case .system: Color(nsColor: .controlAccentColor)
-    case .glass: Color(nsColor: BarRememberPalette.color(0x7BC4FF))
+    case .glass: Color(nsColor: BarRememberPalette.color(0xAABBC7))
     case .midnight: Color(nsColor: BarRememberPalette.color(0x344B9A))
     case .paper: Color(nsColor: BarRememberPalette.color(0xD69A56))
     }
@@ -88,7 +88,7 @@ enum BarRememberPalette {
     themedColor { theme in
       switch theme {
       case .system: (0x000000, 0x000000, 0, 0)
-      case .glass: (0xE5F4FF, 0x15263F, 0.36, 0.28)
+      case .glass: (0xF4F7F7, 0x111820, 0.18, 0.24)
       case .midnight: (0x111B2B, 0x101522, 0.74, 0.78)
       case .paper: (0xFFF9F0, 0x28231D, 0.92, 0.88)
       }
@@ -99,7 +99,7 @@ enum BarRememberPalette {
     themedColor { theme in
       switch theme {
       case .system: (0x1F2937, 0xF3F5F8, 0.055, 0.09)
-      case .glass: (0x6B9CC6, 0xD4E9FF, 0.15, 0.14)
+      case .glass: (0xFFFFFF, 0x24313D, 0.11, 0.18)
       case .midnight: (0x7E9DDE, 0xC6D7FF, 0.16, 0.13)
       case .paper: (0x9B754C, 0xE7CBA8, 0.11, 0.12)
       }
@@ -136,7 +136,7 @@ enum BarRememberPalette {
   private static func accentColors(_ theme: BarRememberTheme) -> (UInt32, UInt32, CGFloat, CGFloat) {
     switch theme {
     case .system: (0x5267E9, 0x91A0FF, 1, 1)
-    case .glass: (0x1769B0, 0x8CCBFF, 1, 1)
+    case .glass: (0x274A78, 0xA9C8E8, 1, 1)
     case .midnight: (0x95AEFF, 0xA9BDFF, 1, 1)
     case .paper: (0xA45C22, 0xF1B77D, 1, 1)
     }

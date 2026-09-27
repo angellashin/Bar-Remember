@@ -98,7 +98,17 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
 
     NSApp.activate(ignoringOtherApps: true)
     panel.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    configurePopoverWindow(panel)
     panel.contentViewController?.view.window?.becomeKey()
+  }
+
+  private func configurePopoverWindow(_ panel: NSPopover) {
+    guard let window = panel.contentViewController?.view.window else { return }
+    window.isOpaque = false
+    window.backgroundColor = .clear
+    window.hasShadow = true
+    panel.contentViewController?.view.wantsLayer = true
+    panel.contentViewController?.view.layer?.backgroundColor = NSColor.clear.cgColor
   }
 
   private func installOutsideClickMonitor() {

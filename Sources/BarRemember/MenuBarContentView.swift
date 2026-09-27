@@ -59,8 +59,14 @@ struct MenuBarContentView: View {
       }
     }
     .frame(width: 380, height: 520)
-    .background(BarRememberPalette.popoverOverlay)
-    .background(.ultraThinMaterial)
+    .background {
+      if BarRememberTheme.resolve(themeRawValue) == .glass {
+        GlassPopoverBackground()
+      } else {
+        BarRememberPalette.popoverOverlay
+          .background(.ultraThinMaterial)
+      }
+    }
     .overlay {
       if BarRememberTheme.resolve(themeRawValue) == .glass {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -425,6 +431,55 @@ struct MenuBarContentView: View {
     if decision.shouldTerminate {
       NSApplication.shared.terminate(nil)
     }
+  }
+}
+
+private struct GlassPopoverBackground: View {
+  var body: some View {
+    ZStack {
+      GlassMaterialView()
+
+      // A quiet, out-of-focus color field gives the transparent surface depth
+      // without turning the menu-bar popover into a decorative dashboard.
+      RadialGradient(
+        colors: [
+          Color(red: 0.34, green: 0.62, blue: 0.78, opacity: 0.22),
+          .clear,
+        ],
+        center: .topLeading,
+        startRadius: 8,
+        endRadius: 270
+      )
+      RadialGradient(
+        colors: [
+          Color(red: 0.42, green: 0.34, blue: 0.68, opacity: 0.14),
+          .clear,
+        ],
+        center: .bottomTrailing,
+        startRadius: 12,
+        endRadius: 300
+      )
+      Color.white.opacity(0.06)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+  }
+}
+
+private struct GlassMaterialView: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSVisualEffectView {
+    let view = NSVisualEffectView()
+    view.material = .popover
+    view.blendingMode = .behindWindow
+    view.state = .active
+    view.wantsLayer = true
+    view.layer?.backgroundColor = NSColor.clear.cgColor
+    return view
+  }
+
+  func updateNSView(_ view: NSVisualEffectView, context: Context) {
+    view.material = .popover
+    view.blendingMode = .behindWindow
+    view.state = .active
   }
 }
 

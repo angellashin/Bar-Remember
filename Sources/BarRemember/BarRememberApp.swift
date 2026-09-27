@@ -3,18 +3,6 @@ import Combine
 import SwiftUI
 
 @main
-struct BarRememberApp: App {
-  @NSApplicationDelegateAdaptor(BarRememberAppDelegate.self) private var appDelegate
-
-  var body: some Scene {
-    // The app is a menu-bar utility. The delegate owns the status item and
-    // popover so SwiftUI state updates cannot recreate or dismiss the window.
-    Settings {
-      EmptyView()
-    }
-  }
-}
-
 @MainActor
 final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   let reminderStore = ReminderStore()
@@ -24,6 +12,14 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   private var popover: NSPopover?
   private var remindersSubscription: AnyCancellable?
   private var outsideClickMonitor: Any?
+
+  static func main() {
+    let application = NSApplication.shared
+    let delegate = BarRememberAppDelegate()
+    application.delegate = delegate
+    application.setActivationPolicy(.accessory)
+    application.run()
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     configureStatusItem()

@@ -107,7 +107,10 @@ final class ReminderStore: ObservableObject {
       }
     } catch {
       authorizationState = .failed(error.localizedDescription)
-      errorMessage = "리마인더 접근 권한을 요청하지 못했습니다."
+      errorMessage = AppLanguage.localized(
+        korean: "리마인더 접근 권한을 요청하지 못했습니다.",
+        english: "Could not request Reminders access."
+      )
     }
   }
 
@@ -217,13 +220,18 @@ final class ReminderStore: ObservableObject {
   @discardableResult
   func addSection(title: String) -> ReminderSection? {
     guard ReminderSectionPolicy.normalizedTitle(title) != nil else {
-      errorMessage = "공간 이름을 입력해주세요."
+      errorMessage = AppLanguage.localized(
+        korean: "공간 이름을 입력해주세요.", english: "Enter a space name."
+      )
       return nil
     }
     guard let updatedSections = ReminderSectionPolicy.adding(title: title, to: sections),
       let addedSection = updatedSections.last
     else {
-      errorMessage = "같은 이름의 공간이 이미 있습니다."
+      errorMessage = AppLanguage.localized(
+        korean: "같은 이름의 공간이 이미 있습니다.",
+        english: "A space with that name already exists."
+      )
       return nil
     }
 
@@ -235,7 +243,9 @@ final class ReminderStore: ObservableObject {
   @discardableResult
   func renameSection(_ sectionID: String, title: String) -> Bool {
     guard ReminderSectionPolicy.normalizedTitle(title) != nil else {
-      errorMessage = "공간 이름을 입력해주세요."
+      errorMessage = AppLanguage.localized(
+        korean: "공간 이름을 입력해주세요.", english: "Enter a space name."
+      )
       return false
     }
     guard
@@ -245,7 +255,10 @@ final class ReminderStore: ObservableObject {
         in: sections
       )
     else {
-      errorMessage = "같은 이름의 공간이 이미 있습니다."
+      errorMessage = AppLanguage.localized(
+        korean: "같은 이름의 공간이 이미 있습니다.",
+        english: "A space with that name already exists."
+      )
       return false
     }
 
@@ -266,7 +279,10 @@ final class ReminderStore: ObservableObject {
         from: configuration
       )
     else {
-      errorMessage = "기본 공간은 삭제할 수 없습니다."
+      errorMessage = AppLanguage.localized(
+        korean: "기본 공간은 삭제할 수 없습니다.",
+        english: "The default space cannot be deleted."
+      )
       return false
     }
 
@@ -312,7 +328,10 @@ final class ReminderStore: ObservableObject {
     guard let listID = activeAddList(for: section)?.id,
       let calendar = eventStore.calendar(withIdentifier: listID)
     else {
-      errorMessage = "\(section.title)에 항목을 추가할 목록을 선택해주세요."
+      errorMessage = AppLanguage.localized(
+        korean: "\(section.title)에 항목을 추가할 목록을 선택해주세요.",
+        english: "Choose a list for \(section.title) before adding an item."
+      )
       return false
     }
 
@@ -328,7 +347,10 @@ final class ReminderStore: ObservableObject {
       await reload()
       return true
     } catch {
-      errorMessage = "\(section.title)에 항목을 추가하지 못했습니다: \(error.localizedDescription)"
+      errorMessage = AppLanguage.localized(
+        korean: "\(section.title)에 항목을 추가하지 못했습니다: \(error.localizedDescription)",
+        english: "Could not add an item to \(section.title): \(error.localizedDescription)"
+      )
       return false
     }
   }
@@ -342,7 +364,10 @@ final class ReminderStore: ObservableObject {
       .first(where: \.allowsContentModifications)?.source
 
     guard let source else {
-      errorMessage = "\(section.title) 목록을 만들 Reminders 계정을 찾지 못했습니다."
+      errorMessage = AppLanguage.localized(
+        korean: "\(section.title) 목록을 만들 Reminders 계정을 찾지 못했습니다.",
+        english: "No Reminders account is available to create the \(section.title) list."
+      )
       return false
     }
 
@@ -356,7 +381,10 @@ final class ReminderStore: ObservableObject {
       await reload()
       return true
     } catch {
-      errorMessage = "\(section.title) 목록을 만들지 못했습니다: \(error.localizedDescription)"
+      errorMessage = AppLanguage.localized(
+        korean: "\(section.title) 목록을 만들지 못했습니다: \(error.localizedDescription)",
+        english: "Could not create the \(section.title) list: \(error.localizedDescription)"
+      )
       return false
     }
   }
@@ -367,7 +395,9 @@ final class ReminderStore: ObservableObject {
     dueDateUpdate: ReminderDueDateUpdate
   ) async -> Bool {
     guard let normalizedTitle = ReminderTitlePolicy.normalized(title) else {
-      errorMessage = "할 일 제목을 입력해주세요."
+      errorMessage = AppLanguage.localized(
+        korean: "할 일 제목을 입력해주세요.", english: "Enter a reminder title."
+      )
       return false
     }
     let titleChanged = normalizedTitle != item.title
@@ -378,7 +408,10 @@ final class ReminderStore: ObservableObject {
     defer { updatingReminderIDs.remove(item.id) }
 
     guard let reminder = eventStore.calendarItem(withIdentifier: item.id) as? EKReminder else {
-      errorMessage = "이 할 일을 다시 찾지 못했습니다. 목록을 새로고침합니다."
+      errorMessage = AppLanguage.localized(
+        korean: "이 할 일을 다시 찾지 못했습니다. 목록을 새로고침합니다.",
+        english: "This reminder could not be found. The list will refresh."
+      )
       await reload()
       return false
     }
@@ -406,7 +439,10 @@ final class ReminderStore: ObservableObject {
       reminder.dueDateComponents = previousDueDateComponents
       let errorDescription = error.localizedDescription
       await reload()
-      errorMessage = "할 일 변경 사항을 저장하지 못했습니다: \(errorDescription)"
+      errorMessage = AppLanguage.localized(
+        korean: "할 일 변경 사항을 저장하지 못했습니다: \(errorDescription)",
+        english: "Could not save reminder changes: \(errorDescription)"
+      )
       return false
     }
   }
@@ -417,7 +453,10 @@ final class ReminderStore: ObservableObject {
     defer { completingIDs.remove(item.id) }
 
     guard let reminder = eventStore.calendarItem(withIdentifier: item.id) as? EKReminder else {
-      errorMessage = "이 할 일을 다시 찾지 못했습니다. 목록을 새로고침합니다."
+      errorMessage = AppLanguage.localized(
+        korean: "이 할 일을 다시 찾지 못했습니다. 목록을 새로고침합니다.",
+        english: "This reminder could not be found. The list will refresh."
+      )
       await reload()
       return
     }
@@ -437,7 +476,10 @@ final class ReminderStore: ObservableObject {
       reminder.completionDate = previousCompletionDate
       let errorDescription = error.localizedDescription
       await reload()
-      errorMessage = "완료 상태를 저장하지 못했습니다: \(errorDescription)"
+      errorMessage = AppLanguage.localized(
+        korean: "완료 상태를 저장하지 못했습니다: \(errorDescription)",
+        english: "Could not save the completion state: \(errorDescription)"
+      )
     }
   }
 
@@ -454,7 +496,10 @@ final class ReminderStore: ObservableObject {
     else {
       undoableCompletion = nil
       await reload()
-      errorMessage = "되돌릴 할 일을 다시 찾지 못했습니다."
+      errorMessage = AppLanguage.localized(
+        korean: "되돌릴 할 일을 다시 찾지 못했습니다.",
+        english: "The reminder to undo could not be found."
+      )
       return
     }
 
@@ -481,7 +526,10 @@ final class ReminderStore: ObservableObject {
       reminder.completionDate = previousCompletionDate
       let errorDescription = error.localizedDescription
       await reload()
-      errorMessage = "완료 상태를 되돌리지 못했습니다: \(errorDescription)"
+      errorMessage = AppLanguage.localized(
+        korean: "완료 상태를 되돌리지 못했습니다: \(errorDescription)",
+        english: "Could not undo the completion state: \(errorDescription)"
+      )
     }
   }
 
@@ -523,7 +571,9 @@ final class ReminderStore: ObservableObject {
     case .writeOnly:
       authorizationState = .denied
     @unknown default:
-      authorizationState = .failed("알 수 없는 권한 상태")
+      authorizationState = .failed(
+        AppLanguage.localized(korean: "알 수 없는 권한 상태", english: "Unknown authorization state")
+      )
     }
   }
 

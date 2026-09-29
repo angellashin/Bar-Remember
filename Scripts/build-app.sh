@@ -27,6 +27,11 @@ BIN_DIR="$(env DEVELOPER_DIR="${BARREMEMBER_DEVELOPER_DIR}" "${BARREMEMBER_SWIFT
 
 cp "${BIN_DIR}/BarRemember" "${MACOS_DIR}/BarRemember"
 cp "${PROJECT_DIR}/Resources/Info.plist" "${CONTENTS_DIR}/Info.plist"
+for localization in en.lproj ko.lproj; do
+    if [[ -d "${PROJECT_DIR}/Resources/${localization}" ]]; then
+        cp -R "${PROJECT_DIR}/Resources/${localization}" "${RESOURCES_DIR}/${localization}"
+    fi
+done
 chmod +x "${MACOS_DIR}/BarRemember"
 
 codesign --force --deep --sign - "${APP_DIR}"

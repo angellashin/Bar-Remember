@@ -35,6 +35,8 @@ struct MenuBarContentView: View {
     ReminderIconColor.indigo.rawValue
   @AppStorage(BarRememberTheme.defaultsKey) private var themeRawValue =
     BarRememberTheme.system.rawValue
+  @AppStorage(AppLanguage.defaultsKey) private var languageRawValue =
+    AppLanguage.korean.rawValue
   @AppStorage(ReminderSection.defaultsKey) private var selectedSectionRawValue =
     ReminderSection.tasks.id
   @State private var isShowingListSelection = false
@@ -52,7 +54,8 @@ struct MenuBarContentView: View {
         ListSelectionView(
           isPresented: $isShowingListSelection,
           iconColorRawValue: $iconColorRawValue,
-          themeRawValue: $themeRawValue
+          themeRawValue: $themeRawValue,
+          languageRawValue: $languageRawValue
         )
       } else {
         mainContent
@@ -74,6 +77,7 @@ struct MenuBarContentView: View {
           .allowsHitTesting(false)
       }
     }
+    .environment(\.locale, AppLanguage.resolve(languageRawValue).locale)
     .task {
       if store.section(withID: selectedSectionRawValue) == nil {
         selectedSectionRawValue = store.sections.first?.id ?? ReminderSection.tasksID
@@ -165,7 +169,7 @@ struct MenuBarContentView: View {
       VStack(alignment: .leading, spacing: 3) {
         Text(
           Date.now.formatted(
-            .dateTime.locale(Locale(identifier: "ko_KR")).month().day().weekday(.wide))
+            .dateTime.locale(AppLanguage.resolve(languageRawValue).locale).month().day().weekday(.wide))
         )
         .font(.headline)
         .foregroundStyle(BarRememberPalette.primaryText)
@@ -342,13 +346,23 @@ struct MenuBarContentView: View {
   }
 
   private var summaryText: String {
-    guard store.authorizationState == .granted else { return "리마인더 연결 필요" }
+    guard store.authorizationState == .granted else {
+      return languageRawValue == AppLanguage.english.rawValue
+        ? "Connect Reminders to get started"
+        : "리마인더 연결 필요"
+    }
     if currentSelectedListIDs.isEmpty {
-      return "\(selectedSection.title)에 연결할 목록을 선택해주세요"
+      return languageRawValue == AppLanguage.english.rawValue
+        ? "Choose a list for \(selectedSection.title)"
+        : "\(selectedSection.title)에 연결할 목록을 선택해주세요"
     }
     return visibleReminders.isEmpty
-      ? "\(selectedSection.title)에 남은 항목 없음"
-      : "\(selectedSection.title) \(visibleReminders.count)개"
+      ? (languageRawValue == AppLanguage.english.rawValue
+        ? "No remaining items in \(selectedSection.title)"
+        : "\(selectedSection.title)에 남은 항목 없음")
+      : (languageRawValue == AppLanguage.english.rawValue
+        ? "\(visibleReminders.count) remaining in \(selectedSection.title)"
+        : "\(selectedSection.title) \(visibleReminders.count)개")
   }
 
   private var selectedSection: ReminderSection {
@@ -635,6 +649,7 @@ struct QuickAddReminderView: View {
 }
 
 struct DetectedReminderDateControl: View {
+  @Environment(\.locale) private var locale
   let detectedDate: ParsedReminderDate
   let selectDate: () -> Void
 
@@ -644,15 +659,15 @@ struct DetectedReminderDateControl: View {
         Image(systemName: "wand.and.stars")
           .foregroundStyle(BarRememberPalette.accent)
 
-        Text("\(detectedDate.matchedText) 감지")
+        Text(locale.identifier.hasPrefix("en")
+          ? "\(detectedDate.matchedText) detected"
+          : "\(detectedDate.matchedText) 감지")
           .foregroundStyle(BarRememberPalette.secondaryText)
 
         Spacer(minLength: 8)
 
         Text(
-          detectedDate.dueDate.formatted(
-            .dateTime.locale(Locale(identifier: "ko_KR")).year().month().day()
-          )
+          detectedDate.dueDate.formatted(.dateTime.locale(locale).year().month().day())
         )
         .foregroundStyle(BarRememberPalette.primaryText)
 
@@ -666,13 +681,20 @@ struct DetectedReminderDateControl: View {
     .buttonStyle(.plain)
     .help("자동 감지된 마감 날짜를 직접 수정")
     .accessibilityLabel(
-      "\(detectedDate.dueDate.formatted(.dateTime.locale(Locale(identifier: "ko_KR")).year().month().day())) 마감 날짜 자동 감지됨"
+      locale.identifier.hasPrefix("en")
+        ? "\(detectedDate.dueDate.formatted(.dateTime.locale(locale).year().month().day())) due date detected automatically"
+        : "\(detectedDate.dueDate.formatted(.dateTime.locale(locale).year().month().day())) 마감 날짜 자동 감지됨"
     )
-    .accessibilityHint("눌러서 날짜를 직접 수정합니다.")
+    .accessibilityHint(
+      locale.identifier.hasPrefix("en")
+        ? "Click to edit the date."
+        : "눌러서 날짜를 직접 수정합니다."
+    )
   }
 }
 
 struct OptionalReminderDateControl: View {
+  @Environment(\.locale) private var locale
   @Binding var hasDueDate: Bool
   @Binding var dueDate: Date
   let rendersStaticPreview: Bool
@@ -701,7 +723,7 @@ struct OptionalReminderDateControl: View {
 
         if rendersStaticPreview {
           Text(
-            dueDate.formatted(.dateTime.locale(Locale(identifier: "ko_KR")).year().month().day())
+            dueDate.formatted(.dateTime.locale(locale).year().month().day())
           )
           .font(.caption)
           .foregroundStyle(BarRememberPalette.primaryText)
@@ -714,7 +736,7 @@ struct OptionalReminderDateControl: View {
           .labelsHidden()
           .datePickerStyle(.field)
           .controlSize(.small)
-          .environment(\.locale, Locale(identifier: "ko_KR"))
+          .environment(\.locale, locale)
         }
 
         if rendersStaticPreview {
@@ -877,6 +899,7 @@ struct ReminderSectionPicker: View {
 }
 
 struct ReminderRow: View {
+  @Environment(\.locale) private var locale
   let item: ReminderItemSnapshot
   let isCompleting: Bool
   let iconColor: Color
@@ -1219,14 +1242,15 @@ struct ReminderRow: View {
 
   private func dueLabel(_ date: Date) -> String {
     let calendar = Calendar.current
-    let time = date.formatted(.dateTime.locale(Locale(identifier: "ko_KR")).hour().minute())
+    let time = date.formatted(.dateTime.locale(locale).hour().minute())
+    let isEnglish = locale.identifier.hasPrefix("en")
     if calendar.isDateInToday(date) {
-      return item.hasTime ? "오늘 \(time)" : "오늘"
+      return item.hasTime ? "\(isEnglish ? "Today" : "오늘") \(time)" : (isEnglish ? "Today" : "오늘")
     }
     if calendar.isDateInTomorrow(date) {
-      return item.hasTime ? "내일 \(time)" : "내일"
+      return item.hasTime ? "\(isEnglish ? "Tomorrow" : "내일") \(time)" : (isEnglish ? "Tomorrow" : "내일")
     }
-    let day = date.formatted(.dateTime.locale(Locale(identifier: "ko_KR")).month().day())
+    let day = date.formatted(.dateTime.locale(locale).month().day())
     return item.hasTime ? "\(day) \(time)" : day
   }
 
@@ -1416,6 +1440,7 @@ private struct ListSelectionView: View {
   @Binding var isPresented: Bool
   @Binding var iconColorRawValue: String
   @Binding var themeRawValue: String
+  @Binding var languageRawValue: String
   @State private var isShowingAddSection = false
   @State private var newSectionTitle = ""
   @State private var sectionBeingRenamed: ReminderSection?
@@ -1566,6 +1591,21 @@ private struct ListSelectionView: View {
               Text("Glass와 미드나이트는 반투명 material 위에 색을 더합니다.")
               .font(.caption2)
               .foregroundStyle(BarRememberPalette.mutedText)
+          }
+
+          Divider()
+
+          VStack(alignment: .leading, spacing: 9) {
+            Text("언어")
+              .font(.caption)
+              .foregroundStyle(BarRememberPalette.secondaryText)
+            Picker("언어", selection: $languageRawValue) {
+              ForEach(AppLanguage.allCases) { language in
+                Text(language.displayName).tag(language.rawValue)
+              }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
           }
 
           Divider()

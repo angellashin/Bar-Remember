@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Swift-6.2%2B-F05138" alt="Swift 6.2 or later">
 </p>
 
-![BarRemember menu bar window](docs/screenshots/menu-bar.png)
+<img src="docs/screenshots/menu-bar.png" alt="BarRemember menu bar window" width="520">
 
 ## Why BarRemember?
 

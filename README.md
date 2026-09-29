@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Swift-6.2%2B-F05138" alt="Swift 6.2 or later">
 </p>
 
-<img src="docs/screenshots/menu-bar.png" alt="BarRemember menu bar window" width="520">
+<img src="docs/screenshots/desktop-menu-bar.png" alt="BarRemember menu bar popover on a macOS desktop" width="760">
 
 ## Why BarRemember?
 

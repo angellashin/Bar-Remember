@@ -71,6 +71,18 @@ swift test
 
 The date parser is a small, predictable rules engine. It recognizes explicit numeric dates (`9/28`, `2026-09-28`) and a small set of relative words in Korean and English. It does not call an AI model.
 
+### Type a date at the end of any item
+
+Date detection works in every BarRemember space and in both flows: adding a new item and editing an existing item. Type the date as the final part of the title, then submit or save:
+
+```text
+Prepare interview notes 9/28
+Send the proposal tomorrow
+Team offsite 2026-10-14
+```
+
+BarRemember removes the recognized suffix from the title and stores it as the due date. This works for the default Tasks space and any custom space, including items backed by different Reminders lists. If you choose a date manually, the manual date takes precedence.
+
 ## Localization
 
 The shipped UI supports:

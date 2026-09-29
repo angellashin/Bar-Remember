@@ -268,6 +268,29 @@ struct ReminderModelsTests {
     #expect(resolved.dueDate == manualDate)
   }
 
+  @Test func editingWithTrailingDateCleansTitleAndSetsTheDetectedDate() throws {
+    let calendar = try seoulCalendar()
+    let now = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 14))
+    )
+    let resolved = try #require(
+      ReminderEditDraftPolicy.resolve(
+        title: "Prepare interview notes 9/28",
+        dueDateUpdate: .unchanged,
+        now: now,
+        calendar: calendar
+      )
+    )
+
+    #expect(resolved.title == "Prepare interview notes")
+    guard case .set(let dueDate) = resolved.dueDateUpdate else {
+      Issue.record("Expected a detected due date update")
+      return
+    }
+    #expect(calendar.dateComponents([.year, .month, .day], from: dueDate)
+      == DateComponents(year: 2026, month: 9, day: 28))
+  }
+
   @Test func newReminderDueDateUsesDateOnlyComponents() throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = try #require(TimeZone(secondsFromGMT: 9 * 60 * 60))

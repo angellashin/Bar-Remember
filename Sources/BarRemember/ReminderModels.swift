@@ -422,6 +422,11 @@ struct ReminderCreationDraft: Equatable, Sendable {
   let dueDate: Date?
 }
 
+struct ReminderEditDraft: Equatable, Sendable {
+  let title: String
+  let dueDateUpdate: ReminderDueDateUpdate
+}
+
 enum ReminderCreationDraftPolicy {
   static func resolve(
     title: String,
@@ -438,6 +443,32 @@ enum ReminderCreationDraftPolicy {
     return ReminderCreationDraft(
       title: parsedDate?.title ?? normalizedTitle,
       dueDate: manuallySelectedDueDate ?? parsedDate?.dueDate
+    )
+  }
+}
+
+enum ReminderEditDraftPolicy {
+  static func resolve(
+    title: String,
+    dueDateUpdate: ReminderDueDateUpdate,
+    now: Date = Date(),
+    calendar: Calendar = .current
+  ) -> ReminderEditDraft? {
+    guard let normalizedTitle = ReminderTitlePolicy.normalized(title) else { return nil }
+    let parsedDate = ReminderNaturalLanguageDateParser.parse(
+      normalizedTitle,
+      now: now,
+      calendar: calendar
+    )
+    let resolvedDueDateUpdate: ReminderDueDateUpdate
+    if let parsedDate, dueDateUpdate == .unchanged {
+      resolvedDueDateUpdate = .set(parsedDate.dueDate)
+    } else {
+      resolvedDueDateUpdate = dueDateUpdate
+    }
+    return ReminderEditDraft(
+      title: parsedDate?.title ?? normalizedTitle,
+      dueDateUpdate: resolvedDueDateUpdate
     )
   }
 }

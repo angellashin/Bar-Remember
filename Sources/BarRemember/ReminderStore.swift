@@ -400,8 +400,21 @@ final class ReminderStore: ObservableObject {
       )
       return false
     }
-    let titleChanged = normalizedTitle != item.title
-    guard titleChanged || dueDateUpdate != .unchanged else { return true }
+
+    // Keep typed date suffixes consistent with Quick Add for every space and
+    // edit path. A manually changed date still takes precedence over a
+    // detected suffix, matching the creation flow.
+    guard let draft = ReminderEditDraftPolicy.resolve(
+      title: normalizedTitle,
+      dueDateUpdate: dueDateUpdate
+    ) else {
+      return false
+    }
+    let resolvedTitle = draft.title
+    let resolvedDueDateUpdate = draft.dueDateUpdate
+
+    let titleChanged = resolvedTitle != item.title
+    guard titleChanged || resolvedDueDateUpdate != .unchanged else { return true }
     guard !updatingReminderIDs.contains(item.id) else { return false }
 
     updatingReminderIDs.insert(item.id)
@@ -419,9 +432,9 @@ final class ReminderStore: ObservableObject {
     let previousTitle = reminder.title
     let previousDueDateComponents = reminder.dueDateComponents
     if titleChanged {
-      reminder.title = normalizedTitle
+      reminder.title = resolvedTitle
     }
-    switch dueDateUpdate {
+    switch resolvedDueDateUpdate {
     case .unchanged:
       break
     case .remove:

@@ -32,7 +32,7 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 - Add, edit, reorder, and delete due dates without opening the full Reminders app.
 - Detect clear date suffixes such as `CJ application deadline 9/28` or `Send proposal tomorrow` using deterministic rules, not AI.
 - Choose a completion-circle color and switch between System, Paper, Glass, and Midnight themes.
-- Glass uses translucent materials, layered color fields, and a light border so the background remains visible.
+- Glass uses a clear, behind-window material and a light border so the real desktop background softly shows through.
 - English and Korean UI with a language switch in Settings.
 - Optional launch-at-login support.
 

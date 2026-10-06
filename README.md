@@ -31,10 +31,13 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 - Complete an item directly from the popover, with a short undo action when you clicked by mistake.
 - Add, edit, reorder, and delete due dates without opening the full Reminders app.
 - Detect clear date suffixes such as `CJ application deadline 9/28` or `Send proposal tomorrow` using deterministic rules, not AI.
+- Pin one reminder to the menu bar at a time. You can hide its title; long titles are shortened only in the menu bar, never in Reminders. Completing a pinned item unpins it and returns to the normal icon without automatically pinning another item.
 - Choose a completion-circle color and switch between System, Paper, Glass, and Midnight themes.
 - Glass uses a clear, behind-window material and a light border so the real desktop background softly shows through.
 - English and Korean UI with a language switch in Settings.
 - Optional launch-at-login support.
+
+<img src="docs/screenshots/pinned-menu-bar-demo.png" alt="Synthetic fixture showing a pinned reminder in the menu bar and the normal icon after unpinning" width="760">
 
 ## Requirements
 

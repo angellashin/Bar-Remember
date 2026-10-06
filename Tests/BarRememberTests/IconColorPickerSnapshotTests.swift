@@ -5,6 +5,219 @@ import Testing
 @testable import BarRemember
 
 struct IconColorPickerSnapshotTests {
+  @Test @MainActor func pinnedMenuBarDemoRendersBeforeAndAfterWithFixtureData() throws {
+    let longTitle = "Read SwiftUI notes and prepare a detailed design review for the team"
+    let item = ReminderItemSnapshot(
+      id: "demo-pinned",
+      title: longTitle,
+      notes: nil,
+      dueDate: nil,
+      hasTime: false,
+      priority: 0,
+      listID: "demo-work",
+      listTitle: "Work",
+      listTint: .accent
+    )
+    let row: (Bool) -> ReminderRow = { isPinned in
+      ReminderRow(
+        item: item,
+        isCompleting: false,
+        iconColor: ReminderIconColor.indigo.color,
+        itemKindLabel: "Task",
+        completionActionTitle: "Complete",
+        allowsDragging: false,
+        isPinned: isPinned,
+        onComplete: {},
+        onMove: { _ in false },
+        onMoveUp: {},
+        onMoveDown: {},
+        onTogglePin: {}
+      )
+    }
+    let view = HStack(spacing: 16) {
+      pinnedDemoCard(label: "Before pinning", menuTitle: nil, row: row(false))
+      pinnedDemoCard(
+        label: "Pinned to menu bar",
+        menuTitle: MenuBarPinnedReminderPolicy.displayTitle(longTitle),
+        row: row(true)
+      )
+    }
+    .padding(16)
+    .frame(width: 760, height: 240)
+    .background(Color(nsColor: .windowBackgroundColor))
+    .environment(\.locale, Locale(identifier: "en_US"))
+
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    let image = try #require(renderer.nsImage)
+    #expect(image.size.width == 760)
+    #expect(image.size.height == 240)
+
+    guard let outputPath = ProcessInfo.processInfo.environment[
+      "BARREMEMBER_PINNED_DEMO_SCREENSHOT_PATH"
+    ] else { return }
+    let tiffData = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiffData))
+    let pngData = try #require(bitmap.representation(using: .png, properties: [:]))
+    try pngData.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
+  }
+
+  @MainActor private func pinnedDemoCard(
+    label: String,
+    menuTitle: String?,
+    row: ReminderRow
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text(label).font(.headline)
+      HStack {
+        Image(systemName: menuTitle == nil ? "checklist" : "pin.fill")
+        Text(menuTitle ?? "BarRemember")
+          .lineLimit(1)
+        Spacer()
+      }
+      .padding(8)
+      .background(BarRememberPalette.controlFill, in: RoundedRectangle(cornerRadius: 8))
+      row
+    }
+    .frame(width: 348, alignment: .leading)
+  }
+
+  @Test @MainActor func englishDemoRendersOnlyIsolatedSampleData() throws {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try #require(TimeZone(identifier: "America/Los_Angeles"))
+    let today = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 10, day: 6, hour: 9))
+    )
+    let tomorrow = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 10, day: 7))
+    )
+    let items = [
+      ReminderItemSnapshot(
+        id: "demo-landing-page",
+        title: "Review landing page",
+        notes: nil,
+        dueDate: today,
+        hasTime: false,
+        priority: 0,
+        listID: "demo-work",
+        listTitle: "Work",
+        listTint: .accent
+      ),
+      ReminderItemSnapshot(
+        id: "demo-design-feedback",
+        title: "Send design feedback",
+        notes: nil,
+        dueDate: tomorrow,
+        hasTime: false,
+        priority: 0,
+        listID: "demo-work",
+        listTitle: "Work",
+        listTint: .accent
+      ),
+      ReminderItemSnapshot(
+        id: "demo-swiftui-notes",
+        title: "Read SwiftUI notes",
+        notes: nil,
+        dueDate: nil,
+        hasTime: false,
+        priority: 0,
+        listID: "demo-work",
+        listTitle: "Work",
+        listTint: .accent
+      ),
+    ]
+    let view = VStack(spacing: 0) {
+      HStack {
+        VStack(alignment: .leading, spacing: 3) {
+          Text("Tuesday, October 6")
+            .font(.headline)
+            .foregroundStyle(BarRememberPalette.primaryText)
+          Text("3 remaining in Tasks")
+            .font(.caption)
+            .foregroundStyle(BarRememberPalette.secondaryText)
+        }
+        Spacer()
+        Image(systemName: "arrow.clockwise")
+          .foregroundStyle(BarRememberPalette.accent)
+      }
+      .padding(.horizontal, 18)
+      .padding(.vertical, 14)
+
+      Divider().opacity(0.55)
+      ReminderSectionPicker(
+        sections: [ReminderSection(id: "demo-tasks", title: "Tasks")],
+        selection: .constant("demo-tasks"),
+        rendersStaticPreview: true,
+        countForSection: { _ in items.count },
+        addSection: {}
+      )
+      .padding(.horizontal, 14)
+      .padding(.vertical, 10)
+
+      Divider().opacity(0.45)
+      QuickAddReminderView(
+        title: .constant("Plan launch retrospective 10/8"),
+        hasDueDate: .constant(false),
+        dueDate: .constant(today),
+        placeholder: "Add a task",
+        lists: [ReminderListInfo(id: "demo-work", title: "Work", tint: .accent, canModify: true)],
+        activeListID: "demo-work",
+        rendersStaticTitlePreview: true,
+        rendersStaticDatePreview: true,
+        currentDate: { today },
+        submit: {}
+      )
+      .padding(.horizontal, 14)
+      .padding(.vertical, 12)
+
+      ForEach(items) { item in
+        ReminderRow(
+          item: item,
+          isCompleting: false,
+          iconColor: ReminderIconColor.indigo.color,
+          itemKindLabel: "Task",
+          completionActionTitle: "Complete",
+          allowsDragging: false,
+          onComplete: {},
+          onMove: { _ in false },
+          onMoveUp: {},
+          onMoveDown: {}
+        )
+      }
+
+      Spacer(minLength: 0)
+      Divider().opacity(0.55)
+      HStack {
+        Label("Settings", systemImage: "slider.horizontal.3")
+        Spacer()
+        Text("Reminders")
+        Spacer()
+        Text("Quit…")
+      }
+      .font(.caption)
+      .foregroundStyle(BarRememberPalette.accent)
+      .padding(.horizontal, 16)
+      .frame(height: 44)
+    }
+    .frame(width: 380, height: 520)
+    .background(Color(nsColor: .windowBackgroundColor))
+    .environment(\.locale, Locale(identifier: "en_US"))
+
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    let image = try #require(renderer.nsImage)
+    #expect(image.size.width == 380)
+    #expect(image.size.height == 520)
+
+    guard let outputPath = ProcessInfo.processInfo.environment[
+      "BARREMEMBER_DEMO_SCREENSHOT_PATH"
+    ] else { return }
+    let tiffData = try #require(image.tiffRepresentation)
+    let bitmap = try #require(NSBitmapImageRep(data: tiffData))
+    let pngData = try #require(bitmap.representation(using: .png, properties: [:]))
+    try pngData.write(to: URL(fileURLWithPath: outputPath), options: .atomic)
+  }
+
   @Test @MainActor func typedDateDetectionFitsQuickAddCard() throws {
     var calendar = Calendar(identifier: .gregorian)
     calendar.timeZone = try #require(TimeZone(identifier: "Asia/Seoul"))

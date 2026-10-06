@@ -15,6 +15,8 @@ final class ReminderStore: ObservableObject {
   @Published private(set) var undoableCompletion: UndoableCompletion?
   @Published private(set) var isUndoingCompletion = false
   @Published private(set) var isLoading = false
+  @Published private(set) var pinnedReminderID: String?
+  @Published private(set) var hidesPinnedReminderTitle: Bool
   @Published private var activeAddListIDs: [String: String] = [:]
   @Published var errorMessage: String?
 
@@ -24,10 +26,15 @@ final class ReminderStore: ObservableObject {
   private static let legacySelectedListIDsKey = "selectedReminderListIDs"
   private static let legacyJobListIDsKey = "jobReminderListIDs"
   private let hasConfiguredSelectionKey = "hasConfiguredReminderListSelection"
+  private let hiddenListIDsKey = "intentionallyHiddenReminderListIDsV1"
+  private let pinnedReminderIDKey = "pinnedReminderID"
+  private let hidesPinnedReminderTitleKey = "hidesPinnedReminderTitle"
+  private let hasMigratedHiddenListIDsKey = "hasMigratedHiddenReminderListIDsV1"
   private let reminderOrderIDsKey = "manualReminderOrderIDs"
   private var eventStoreObserver: NSObjectProtocol?
   private var undoDismissTask: Task<Void, Never>?
   private var manualReminderOrderIDs: [ReminderItemSnapshot.ID]
+  private var intentionallyHiddenListIDs: Set<String>
   private var reloadGeneration = 0
 
   init(eventStore: EKEventStore = EKEventStore(), defaults: UserDefaults = .standard) {
@@ -37,6 +44,11 @@ final class ReminderStore: ObservableObject {
     self.sections = configuration.sections
     self.listSectionAssignments = configuration.listSectionAssignments
     self.manualReminderOrderIDs = defaults.stringArray(forKey: reminderOrderIDsKey) ?? []
+    self.intentionallyHiddenListIDs = Set(
+      defaults.stringArray(forKey: hiddenListIDsKey) ?? []
+    )
+    self.pinnedReminderID = defaults.string(forKey: pinnedReminderIDKey)
+    self.hidesPinnedReminderTitle = defaults.bool(forKey: hidesPinnedReminderTitleKey)
 
     persistSectionConfiguration()
     updateAuthorizationState()
@@ -64,6 +76,25 @@ final class ReminderStore: ObservableObject {
 
   var configuredListIDs: Set<String> {
     Set(listSectionAssignments.keys)
+  }
+
+  var pinnedReminder: ReminderItemSnapshot? {
+    guard let pinnedReminderID else { return nil }
+    return reminders.first { $0.id == pinnedReminderID }
+  }
+
+  func isPinned(_ item: ReminderItemSnapshot) -> Bool {
+    item.id == pinnedReminderID
+  }
+
+  func togglePinnedReminder(_ item: ReminderItemSnapshot) {
+    pinnedReminderID = pinnedReminderID == item.id ? nil : item.id
+    defaults.set(pinnedReminderID, forKey: pinnedReminderIDKey)
+  }
+
+  func setHidesPinnedReminderTitle(_ hidesTitle: Bool) {
+    hidesPinnedReminderTitle = hidesTitle
+    defaults.set(hidesTitle, forKey: hidesPinnedReminderTitleKey)
   }
 
   func selectedListIDs(for section: ReminderSection) -> Set<String> {
@@ -121,6 +152,7 @@ final class ReminderStore: ObservableObject {
     guard authorizationState == .granted else {
       lists = []
       reminders = []
+      reconcilePinnedReminder()
       return
     }
 
@@ -147,16 +179,26 @@ final class ReminderStore: ObservableObject {
 
     let defaultID = eventStore.defaultCalendarForNewReminders()?.calendarIdentifier
     let hasConfiguredSelection = defaults.bool(forKey: hasConfiguredSelectionKey)
-    let legacyTaskListIDs = Set(
-      defaults.stringArray(forKey: Self.legacySelectedListIDsKey) ?? []
-    )
+    if !defaults.bool(forKey: hasMigratedHiddenListIDsKey) {
+      intentionallyHiddenListIDs.formUnion(
+        ReminderListAssignmentPolicy.migratedHiddenListIDs(
+          current: listSectionAssignments,
+          availableLists: snapshots,
+          hasConfiguredSelection: hasConfiguredSelection
+        )
+      )
+      defaults.set(true, forKey: hasMigratedHiddenListIDsKey)
+    }
+    intentionallyHiddenListIDs.formIntersection(Set(snapshots.map(\.id)))
+    persistHiddenListIDs()
     let reconciledAssignments = ReminderListAssignmentPolicy.reconciledAssignments(
       current: listSectionAssignments,
       sections: sections,
       availableLists: snapshots,
-      legacyTaskListIDs: legacyTaskListIDs,
+      legacyTaskListIDs: [],
       defaultID: defaultID,
-      hasConfiguredSelection: hasConfiguredSelection
+      hasConfiguredSelection: hasConfiguredSelection,
+      intentionallyHiddenListIDs: intentionallyHiddenListIDs
     )
 
     if reconciledAssignments != listSectionAssignments {
@@ -189,6 +231,7 @@ final class ReminderStore: ObservableObject {
       storedIDs: manualReminderOrderIDs,
       to: fetched
     )
+    reconcilePinnedReminder()
   }
 
   func assignedSectionID(for listID: String) -> String? {
@@ -200,11 +243,14 @@ final class ReminderStore: ObservableObject {
 
     if let sectionID {
       listSectionAssignments[listID] = sectionID
+      intentionallyHiddenListIDs.remove(listID)
     } else {
       listSectionAssignments.removeValue(forKey: listID)
+      intentionallyHiddenListIDs.insert(listID)
     }
     defaults.set(true, forKey: hasConfiguredSelectionKey)
     persistSectionConfiguration()
+    persistHiddenListIDs()
     reconcileActiveAddLists()
 
     Task {
@@ -287,9 +333,16 @@ final class ReminderStore: ObservableObject {
     }
 
     sections = updated.sections
+    let removedListIDs = Set(
+      listSectionAssignments.compactMap { listID, assignedSectionID in
+        assignedSectionID == sectionID ? listID : nil
+      }
+    )
     listSectionAssignments = updated.listSectionAssignments
+    intentionallyHiddenListIDs.formUnion(removedListIDs)
     activeAddListIDs.removeValue(forKey: sectionID)
     persistSectionConfiguration()
+    persistHiddenListIDs()
 
     Task {
       await reload()
@@ -329,8 +382,8 @@ final class ReminderStore: ObservableObject {
       let calendar = eventStore.calendar(withIdentifier: listID)
     else {
       errorMessage = AppLanguage.localized(
-        korean: "\(section.title)에 항목을 추가할 목록을 선택해주세요.",
-        english: "Choose a list for \(section.title) before adding an item."
+        korean: "\(section.displayTitle)에 항목을 추가할 목록을 선택해주세요.",
+        english: "Choose a list for \(section.displayTitle) before adding an item."
       )
       return false
     }
@@ -348,8 +401,8 @@ final class ReminderStore: ObservableObject {
       return true
     } catch {
       errorMessage = AppLanguage.localized(
-        korean: "\(section.title)에 항목을 추가하지 못했습니다: \(error.localizedDescription)",
-        english: "Could not add an item to \(section.title): \(error.localizedDescription)"
+        korean: "\(section.displayTitle)에 항목을 추가하지 못했습니다: \(error.localizedDescription)",
+        english: "Could not add an item to \(section.displayTitle): \(error.localizedDescription)"
       )
       return false
     }
@@ -365,8 +418,8 @@ final class ReminderStore: ObservableObject {
 
     guard let source else {
       errorMessage = AppLanguage.localized(
-        korean: "\(section.title) 목록을 만들 Reminders 계정을 찾지 못했습니다.",
-        english: "No Reminders account is available to create the \(section.title) list."
+        korean: "\(section.displayTitle) 목록을 만들 Reminders 계정을 찾지 못했습니다.",
+        english: "No Reminders account is available to create the \(section.displayTitle) list."
       )
       return false
     }
@@ -382,8 +435,8 @@ final class ReminderStore: ObservableObject {
       return true
     } catch {
       errorMessage = AppLanguage.localized(
-        korean: "\(section.title) 목록을 만들지 못했습니다: \(error.localizedDescription)",
-        english: "Could not create the \(section.title) list: \(error.localizedDescription)"
+        korean: "\(section.displayTitle) 목록을 만들지 못했습니다: \(error.localizedDescription)",
+        english: "Could not create the \(section.displayTitle) list: \(error.localizedDescription)"
       )
       return false
     }
@@ -413,8 +466,12 @@ final class ReminderStore: ObservableObject {
     let resolvedTitle = draft.title
     let resolvedDueDateUpdate = draft.dueDateUpdate
 
-    let titleChanged = resolvedTitle != item.title
-    guard titleChanged || resolvedDueDateUpdate != .unchanged else { return true }
+    let write = ReminderEditWritePolicy.changes(
+      original: item,
+      resolvedTitle: resolvedTitle,
+      dueDateUpdate: resolvedDueDateUpdate
+    )
+    guard !write.isEmpty else { return true }
     guard !updatingReminderIDs.contains(item.id) else { return false }
 
     updatingReminderIDs.insert(item.id)
@@ -431,10 +488,10 @@ final class ReminderStore: ObservableObject {
 
     let previousTitle = reminder.title
     let previousDueDateComponents = reminder.dueDateComponents
-    if titleChanged {
-      reminder.title = resolvedTitle
+    if let title = write.title {
+      reminder.title = title
     }
-    switch resolvedDueDateUpdate {
+    switch write.dueDateUpdate {
     case .unchanged:
       break
     case .remove:
@@ -479,6 +536,10 @@ final class ReminderStore: ObservableObject {
     reminder.isCompleted = true
     reminder.completionDate = Date()
     reminders = ReminderCompletionPolicy.hiding(itemID: item.id, from: reminders)
+    if pinnedReminderID == item.id {
+      pinnedReminderID = nil
+      defaults.removeObject(forKey: pinnedReminderIDKey)
+    }
     await Task.yield()
 
     do {
@@ -610,6 +671,22 @@ final class ReminderStore: ObservableObject {
     defaults.set(data, forKey: Self.configurationKey)
   }
 
+  private func persistHiddenListIDs() {
+    defaults.set(Array(intentionallyHiddenListIDs).sorted(), forKey: hiddenListIDsKey)
+  }
+
+  private func reconcilePinnedReminder() {
+    let reconciledID = MenuBarPinnedReminderPolicy.reconciledPinnedID(
+      pinnedReminderID,
+      availableIDs: Set(reminders.map(\.id))
+    )
+    guard reconciledID != pinnedReminderID else { return }
+    if reconciledID == nil {
+      self.pinnedReminderID = nil
+      defaults.removeObject(forKey: pinnedReminderIDKey)
+    }
+  }
+
   private func persistManualOrder() {
     manualReminderOrderIDs = ReminderOrderPolicy.storedIDs(
       visibleIDs: reminders.map(\.id),
@@ -693,7 +770,7 @@ final class ReminderStore: ObservableObject {
     return ReminderItemSnapshot(
       id: reminder.calendarItemIdentifier,
       title: reminder.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        ?? "제목 없는 할 일",
+        ?? AppLanguage.localized(korean: "제목 없는 할 일", english: "Untitled reminder"),
       notes: trimmedNotes?.nilIfEmpty,
       dueDate: dueDate,
       hasTime: hasTime,

@@ -12,6 +12,8 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   private var popover: NSPopover?
   private var remindersSubscription: AnyCancellable?
   private var outsideClickMonitor: Any?
+  private var statusItemLength: CGFloat?
+  private var isPopoverRepositionScheduled = false
 
   static func main() {
     let application = NSApplication.shared
@@ -50,7 +52,11 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
     button.title = ""
     button.toolTip = "BarRemember"
     statusItem = item
-    updateStatusItem(count: reminderStore.reminders.count)
+    updateStatusItem(
+      count: reminderStore.reminders.count,
+      pinnedReminder: reminderStore.pinnedReminder,
+      hidesPinnedTitle: reminderStore.hidesPinnedReminderTitle
+    )
   }
 
   private func configurePopover() {
@@ -67,25 +73,54 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func observeReminderCount() {
-    remindersSubscription = reminderStore.$reminders
-      .map(\.count)
-      .removeDuplicates()
+    remindersSubscription = Publishers.CombineLatest3(
+      reminderStore.$reminders,
+      reminderStore.$pinnedReminderID,
+      reminderStore.$hidesPinnedReminderTitle
+    )
       .receive(on: RunLoop.main)
-      .sink { [weak self] count in
-        self?.updateStatusItem(count: count)
+      .sink { [weak self] reminders, _, hidesPinnedTitle in
+        self?.updateStatusItem(
+          count: reminders.count,
+          pinnedReminder: self?.reminderStore.pinnedReminder,
+          hidesPinnedTitle: hidesPinnedTitle
+        )
       }
   }
 
-  private func updateStatusItem(count: Int) {
-    guard let button = statusItem?.button else { return }
+  private func updateStatusItem(
+    count: Int,
+    pinnedReminder: ReminderItemSnapshot?,
+    hidesPinnedTitle: Bool
+  ) {
+    guard let statusItem, let button = statusItem.button else { return }
+    let pinnedTitle = pinnedReminder.map { MenuBarPinnedReminderPolicy.displayTitle($0.title) }
     button.image = NSImage(
-      systemSymbolName: count == 0 ? "checkmark.circle" : "checklist",
+      systemSymbolName: pinnedReminder == nil ? (count == 0 ? "checkmark.circle" : "checklist") : "pin.fill",
       accessibilityDescription: "BarRemember"
     )
-    button.title = count > 0 ? " \(count)" : ""
-    button.setAccessibilityLabel(count == 0
-      ? "남은 리마인더 없음"
-      : "남은 리마인더 \(count)개")
+    button.title = pinnedTitle.map { hidesPinnedTitle ? "" : " \($0)" } ?? (count > 0 ? " \(count)" : "")
+    let newStatusItemLength = pinnedTitle == nil || hidesPinnedTitle ? NSStatusItem.squareLength : 190
+    let shouldRepositionPopover = MenuBarPopoverAnchorPolicy.shouldReposition(
+      popoverIsShown: popover?.isShown == true,
+      previousStatusItemLength: statusItemLength,
+      newStatusItemLength: newStatusItemLength
+    )
+    statusItem.length = newStatusItemLength
+    statusItemLength = newStatusItemLength
+    button.setAccessibilityLabel(
+      pinnedReminder.map { $0.title }
+        ?? (count == 0
+        ? AppLanguage.localized(korean: "남은 리마인더 없음", english: "No remaining reminders")
+        : AppLanguage.localized(
+          korean: "남은 리마인더 \(count)개",
+          english: "\(count) remaining reminders"
+        ))
+    )
+
+    if shouldRepositionPopover {
+      schedulePopoverReposition()
+    }
   }
 
   @objc private func togglePopover(_ sender: Any?) {
@@ -97,9 +132,35 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     NSApp.activate(ignoringOtherApps: true)
-    panel.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    showPopover(panel, relativeTo: button)
     configurePopoverWindow(panel)
     panel.contentViewController?.view.window?.becomeKey()
+  }
+
+  private func schedulePopoverReposition() {
+    guard !isPopoverRepositionScheduled else { return }
+    isPopoverRepositionScheduled = true
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.isPopoverRepositionScheduled = false
+      guard let panel = self.popover, panel.isShown, let button = self.statusItem?.button else { return }
+
+      // NSStatusBar lays out an item's new width on the next main-loop turn. Re-showing an
+      // already visible popover updates its positioning rect without closing its content.
+      button.superview?.layoutSubtreeIfNeeded()
+      button.layoutSubtreeIfNeeded()
+      self.showPopover(panel, relativeTo: button)
+      self.configurePopoverWindow(panel)
+      // Repositioning an already-visible NSPopover can resign its window. Restore
+      // key-window status without closing it so the in-place title editor keeps
+      // accepting keyboard input and preserves its draft/selection.
+      panel.contentViewController?.view.window?.becomeKey()
+    }
+  }
+
+  private func showPopover(_ panel: NSPopover, relativeTo button: NSStatusBarButton) {
+    panel.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
   }
 
   private func configurePopoverWindow(_ panel: NSPopover) {
@@ -123,5 +184,15 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
         panel.performClose(nil)
       }
     }
+  }
+}
+
+enum MenuBarPopoverAnchorPolicy {
+  static func shouldReposition(
+    popoverIsShown: Bool,
+    previousStatusItemLength: CGFloat?,
+    newStatusItemLength: CGFloat
+  ) -> Bool {
+    popoverIsShown && previousStatusItemLength != newStatusItemLength
   }
 }

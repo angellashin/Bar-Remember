@@ -45,6 +45,8 @@ struct MenuBarContentView: View {
   @State private var newReminderTitle = ""
   @State private var newReminderHasDueDate = false
   @State private var newReminderDueDate = Date()
+  @State private var isAddingReminder = false
+  @State private var suppressesDetectedQuickAddDate = false
   @State private var editingReminderID: ReminderItemSnapshot.ID?
   @State private var isConfirmingQuit = false
 
@@ -100,6 +102,10 @@ struct MenuBarContentView: View {
       if !sectionIDs.contains(selectedSectionRawValue) {
         selectedSectionRawValue = store.sections.first?.id ?? ReminderSection.tasksID
       }
+    }
+    .onAppear(perform: showPinnedReminder)
+    .onChange(of: store.pinnedReminderID) { _, _ in
+      showPinnedReminder()
     }
     .alert("새 공간 추가", isPresented: $isShowingAddSection) {
       TextField("예: 공부, 장보기, 지원 공고", text: $newSectionTitle)
@@ -212,6 +218,16 @@ struct MenuBarContentView: View {
 
       Divider().opacity(0.45)
 
+      if let pinnedReminder = store.pinnedReminder {
+        PinnedReminderBanner(
+          item: pinnedReminder,
+          complete: { Task { await store.complete(pinnedReminder) } },
+          unpin: { store.togglePinnedReminder(pinnedReminder) }
+        )
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+      }
+
       if currentSelectedListIDs.isEmpty {
         EmptySelectionView(
           section: selectedSection,
@@ -233,12 +249,13 @@ struct MenuBarContentView: View {
                   item: item,
                   isCompleting: store.completingIDs.contains(item.id),
                   iconColor: selectedIconColor.color,
-                  itemKindLabel: selectedSection.title,
-                  completionActionTitle: "완료",
+                  itemKindLabel: selectedSection.displayTitle,
+                  completionActionTitle: AppLanguage.localized(korean: "완료", english: "Complete"),
                   interactionsDisabled: editingReminderID != nil
                     || !store.updatingReminderIDs.isEmpty,
                   isEditing: editingReminderID == item.id,
                   isSavingChanges: store.updatingReminderIDs.contains(item.id),
+                  isPinned: store.isPinned(item),
                   onComplete: {
                     Task { await store.complete(item) }
                   },
@@ -250,6 +267,9 @@ struct MenuBarContentView: View {
                   },
                   onMoveDown: {
                     store.moveReminder(item.id, offset: 1, in: selectedSection)
+                  },
+                  onTogglePin: {
+                    store.togglePinnedReminder(item)
                   },
                   onBeginEditing: {
                     editingReminderID = item.id
@@ -287,10 +307,12 @@ struct MenuBarContentView: View {
       title: $newReminderTitle,
       hasDueDate: $newReminderHasDueDate,
       dueDate: $newReminderDueDate,
+      suppressesDetectedDate: $suppressesDetectedQuickAddDate,
       placeholder: quickAddPlaceholder,
       lists: currentSelectedLists,
       activeListID: currentActiveAddList?.id,
       selectList: { store.setActiveAddList($0, for: selectedSection) },
+      isSubmitting: isAddingReminder,
       submit: addReminder
     )
   }
@@ -353,16 +375,16 @@ struct MenuBarContentView: View {
     }
     if currentSelectedListIDs.isEmpty {
       return languageRawValue == AppLanguage.english.rawValue
-        ? "Choose a list for \(selectedSection.title)"
-        : "\(selectedSection.title)에 연결할 목록을 선택해주세요"
+        ? "Choose a list for \(selectedSection.displayTitle)"
+        : "\(selectedSection.displayTitle)에 연결할 목록을 선택해주세요"
     }
     return visibleReminders.isEmpty
       ? (languageRawValue == AppLanguage.english.rawValue
-        ? "No remaining items in \(selectedSection.title)"
-        : "\(selectedSection.title)에 남은 항목 없음")
+        ? "No remaining items in \(selectedSection.displayTitle)"
+        : "\(selectedSection.displayTitle)에 남은 항목 없음")
       : (languageRawValue == AppLanguage.english.rawValue
-        ? "\(visibleReminders.count) remaining in \(selectedSection.title)"
-        : "\(selectedSection.title) \(visibleReminders.count)개")
+        ? "\(visibleReminders.count) remaining in \(selectedSection.displayTitle)"
+        : "\(selectedSection.displayTitle) \(visibleReminders.count)개")
   }
 
   private var selectedSection: ReminderSection {
@@ -393,7 +415,9 @@ struct MenuBarContentView: View {
   }
 
   private var quickAddPlaceholder: String {
-    selectedSection.isDefault ? "새 할 일 추가" : "새 \(selectedSection.title) 항목 추가"
+    languageRawValue == AppLanguage.english.rawValue
+      ? "Add \(selectedSection.isDefault ? "task" : "item to \(selectedSection.displayTitle)")"
+      : (selectedSection.isDefault ? "새 할 일 추가" : "새 \(selectedSection.displayTitle) 항목 추가")
   }
 
   private var selectedIconColor: ReminderIconColor {
@@ -413,17 +437,32 @@ struct MenuBarContentView: View {
   }
 
   private func addReminder() {
+    guard !isAddingReminder else { return }
+    let submittedTitle = newReminderTitle
+    let submittedHasDueDate = newReminderHasDueDate
+    let submittedDueDate = newReminderDueDate
     guard let draft = ReminderCreationDraftPolicy.resolve(
-      title: newReminderTitle,
-      manuallySelectedDueDate: newReminderHasDueDate ? newReminderDueDate : nil
+      title: submittedTitle,
+      manuallySelectedDueDate: submittedHasDueDate ? submittedDueDate : nil,
+      allowsDetectedDueDate: !suppressesDetectedQuickAddDate
     ) else {
       return
     }
+    isAddingReminder = true
     Task {
-      if await store.addReminder(
+      let wasAdded = await store.addReminder(
         title: draft.title,
         dueDate: draft.dueDate,
         in: selectedSection
+      )
+      isAddingReminder = false
+      if wasAdded, QuickAddSubmissionPolicy.shouldResetDraft(
+        submittedTitle: submittedTitle,
+        submittedHasDueDate: submittedHasDueDate,
+        submittedDueDate: submittedDueDate,
+        currentTitle: newReminderTitle,
+        currentHasDueDate: newReminderHasDueDate,
+        currentDueDate: newReminderDueDate
       ) {
         resetQuickAdd()
       }
@@ -434,6 +473,14 @@ struct MenuBarContentView: View {
     newReminderTitle = ""
     newReminderHasDueDate = false
     newReminderDueDate = Date()
+    suppressesDetectedQuickAddDate = false
+  }
+
+  private func showPinnedReminder() {
+    guard let pinned = store.pinnedReminder,
+      let sectionID = store.assignedSectionID(for: pinned.listID)
+    else { return }
+    selectedSectionRawValue = sectionID
   }
 
   private func handleQuitAction(_ action: QuitConfirmationAction) {
@@ -445,6 +492,38 @@ struct MenuBarContentView: View {
     if decision.shouldTerminate {
       NSApplication.shared.terminate(nil)
     }
+  }
+}
+
+private struct PinnedReminderBanner: View {
+  let item: ReminderItemSnapshot
+  let complete: () -> Void
+  let unpin: () -> Void
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 8) {
+      Image(systemName: "pin.fill")
+        .foregroundStyle(BarRememberPalette.accent)
+      Text(item.title)
+        .font(.caption.weight(.medium))
+        .foregroundStyle(BarRememberPalette.primaryText)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: 0)
+      Button(action: complete) {
+        Image(systemName: "checkmark.circle")
+      }
+      .buttonStyle(.borderless)
+      .help(AppLanguage.localized(korean: "완료", english: "Complete"))
+      .accessibilityLabel(AppLanguage.localized(korean: "완료", english: "Complete"))
+      Button(action: unpin) {
+        Image(systemName: "pin.slash")
+      }
+      .buttonStyle(.borderless)
+      .help(AppLanguage.localized(korean: "메뉴바 고정 해제", english: "Unpin from menu bar"))
+      .accessibilityLabel(AppLanguage.localized(korean: "메뉴바 고정 해제", english: "Unpin from menu bar"))
+    }
+    .padding(9)
+    .background(BarRememberPalette.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 9))
   }
 }
 
@@ -483,6 +562,7 @@ struct QuickAddReminderView: View {
   @Binding var title: String
   @Binding var hasDueDate: Bool
   @Binding var dueDate: Date
+  @Binding var suppressesDetectedDate: Bool
   let placeholder: String
   let lists: [ReminderListInfo]
   let activeListID: String?
@@ -490,12 +570,14 @@ struct QuickAddReminderView: View {
   let rendersStaticDatePreview: Bool
   let currentDate: () -> Date
   let selectList: (String) -> Void
+  let isSubmitting: Bool
   let submit: () -> Void
 
   init(
     title: Binding<String>,
     hasDueDate: Binding<Bool>,
     dueDate: Binding<Date>,
+    suppressesDetectedDate: Binding<Bool> = .constant(false),
     placeholder: String,
     lists: [ReminderListInfo] = [],
     activeListID: String? = nil,
@@ -503,11 +585,13 @@ struct QuickAddReminderView: View {
     rendersStaticDatePreview: Bool = false,
     currentDate: @escaping () -> Date = Date.init,
     selectList: @escaping (String) -> Void = { _ in },
+    isSubmitting: Bool = false,
     submit: @escaping () -> Void
   ) {
     _title = title
     _hasDueDate = hasDueDate
     _dueDate = dueDate
+    _suppressesDetectedDate = suppressesDetectedDate
     self.placeholder = placeholder
     self.lists = lists
     self.activeListID = activeListID
@@ -515,6 +599,7 @@ struct QuickAddReminderView: View {
     self.rendersStaticDatePreview = rendersStaticDatePreview
     self.currentDate = currentDate
     self.selectList = selectList
+    self.isSubmitting = isSubmitting
     self.submit = submit
   }
 
@@ -537,6 +622,9 @@ struct QuickAddReminderView: View {
             .foregroundStyle(BarRememberPalette.primaryText)
             .tint(BarRememberPalette.accent)
             .onSubmit(submit)
+            .onChange(of: title) { _, _ in
+              suppressesDetectedDate = false
+            }
         }
 
         if lists.count > 1 {
@@ -570,7 +658,7 @@ struct QuickAddReminderView: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(BarRememberPalette.accent)
-        .disabled(ReminderTitlePolicy.normalized(title) == nil)
+        .disabled(ReminderTitlePolicy.normalized(title) == nil || isSubmitting)
         .help("항목 추가")
         .accessibilityLabel("새 항목 추가")
       }
@@ -594,7 +682,8 @@ struct QuickAddReminderView: View {
             hasDueDate: $hasDueDate,
             dueDate: $dueDate,
             rendersStaticPreview: rendersStaticDatePreview,
-            defaultDate: currentDate
+            defaultDate: currentDate,
+            onRemove: { suppressesDetectedDate = true }
           )
         }
       }
@@ -610,8 +699,12 @@ struct QuickAddReminderView: View {
   }
 
   private var detectedDate: ParsedReminderDate? {
-    guard !hasDueDate else { return nil }
-    return ReminderNaturalLanguageDateParser.parse(title, now: currentDate())
+    ReminderDateDetectionPolicy.detectedDate(
+      in: title,
+      hasManuallySelectedDueDate: hasDueDate,
+      isDetectionSuppressed: suppressesDetectedDate,
+      now: currentDate()
+    )
   }
 }
 
@@ -666,17 +759,20 @@ struct OptionalReminderDateControl: View {
   @Binding var dueDate: Date
   let rendersStaticPreview: Bool
   let defaultDate: () -> Date
+  let onRemove: () -> Void
 
   init(
     hasDueDate: Binding<Bool>,
     dueDate: Binding<Date>,
     rendersStaticPreview: Bool = false,
-    defaultDate: @escaping () -> Date = Date.init
+    defaultDate: @escaping () -> Date = Date.init,
+    onRemove: @escaping () -> Void = {}
   ) {
     _hasDueDate = hasDueDate
     _dueDate = dueDate
     self.rendersStaticPreview = rendersStaticPreview
     self.defaultDate = defaultDate
+    self.onRemove = onRemove
   }
 
   var body: some View {
@@ -712,6 +808,7 @@ struct OptionalReminderDateControl: View {
             .foregroundStyle(BarRememberPalette.mutedText)
         } else {
           Button {
+            onRemove()
             withAnimation(.easeInOut(duration: 0.12)) {
               hasDueDate = false
             }
@@ -831,7 +928,7 @@ struct ReminderSectionPicker: View {
       }
     } label: {
       HStack(spacing: 6) {
-        Text(section.title)
+          Text(section.displayTitle)
           .font(.callout.weight(isSelected ? .semibold : .medium))
           .foregroundStyle(
             isSelected ? BarRememberPalette.primaryText : BarRememberPalette.secondaryText
@@ -858,8 +955,14 @@ struct ReminderSectionPicker: View {
         )
     }
     .fixedSize(horizontal: true, vertical: false)
-    .help("\(section.title) 공간으로 전환")
-    .accessibilityLabel("\(section.title), \(countForSection(section))개")
+    .help(AppLanguage.localized(
+      korean: "\(section.displayTitle) 공간으로 전환",
+      english: "Switch to \(section.displayTitle)"
+    ))
+    .accessibilityLabel(AppLanguage.localized(
+      korean: "\(section.displayTitle), \(countForSection(section))개",
+      english: "\(section.displayTitle), \(countForSection(section)) items"
+    ))
     .accessibilityValue(isSelected ? "선택됨" : "선택 안 됨")
   }
 
@@ -878,10 +981,12 @@ struct ReminderRow: View {
   let interactionsDisabled: Bool
   let isEditing: Bool
   let isSavingChanges: Bool
+  let isPinned: Bool
   let onComplete: () -> Void
   let onMove: (ReminderItemSnapshot.ID) -> Bool
   let onMoveUp: () -> Void
   let onMoveDown: () -> Void
+  let onTogglePin: () -> Void
   let onBeginEditing: () -> Void
   let onCancelEditing: () -> Void
   let onSaveChanges: (String, ReminderDueDateUpdate) async -> Bool
@@ -904,10 +1009,12 @@ struct ReminderRow: View {
     interactionsDisabled: Bool = false,
     isEditing: Bool = false,
     isSavingChanges: Bool = false,
+    isPinned: Bool = false,
     onComplete: @escaping () -> Void,
     onMove: @escaping (ReminderItemSnapshot.ID) -> Bool,
     onMoveUp: @escaping () -> Void,
     onMoveDown: @escaping () -> Void,
+    onTogglePin: @escaping () -> Void = {},
     onBeginEditing: @escaping () -> Void = {},
     onCancelEditing: @escaping () -> Void = {},
     onSaveChanges: @escaping (String, ReminderDueDateUpdate) async -> Bool = { _, _ in false }
@@ -923,10 +1030,12 @@ struct ReminderRow: View {
     self.interactionsDisabled = interactionsDisabled
     self.isEditing = isEditing
     self.isSavingChanges = isSavingChanges
+    self.isPinned = isPinned
     self.onComplete = onComplete
     self.onMove = onMove
     self.onMoveUp = onMoveUp
     self.onMoveDown = onMoveDown
+    self.onTogglePin = onTogglePin
     self.onBeginEditing = onBeginEditing
     self.onCancelEditing = onCancelEditing
     self.onSaveChanges = onSaveChanges
@@ -953,9 +1062,7 @@ struct ReminderRow: View {
       if isNowEditing {
         resetDrafts()
         if automaticallyFocusEditor {
-          Task { @MainActor in
-            isTitleFieldFocused = true
-          }
+          focusTitleEditor()
         }
       } else {
         isTitleFieldFocused = false
@@ -974,7 +1081,7 @@ struct ReminderRow: View {
     }
     .onAppear {
       if isEditing && automaticallyFocusEditor {
-        isTitleFieldFocused = true
+        focusTitleEditor()
       }
     }
   }
@@ -1075,13 +1182,22 @@ struct ReminderRow: View {
           .accessibilityLabel("\(itemKindLabel) 제목 수정")
       }
     } else {
-      Text(item.title)
-        .font(.system(size: 13.5, weight: .medium))
-        .foregroundStyle(BarRememberPalette.primaryText)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2, perform: beginEditing)
-        .help("더블 클릭하여 수정")
+      HStack(spacing: 5) {
+        if isPinned {
+          Image(systemName: "pin.fill")
+            .font(.caption2)
+            .foregroundStyle(BarRememberPalette.accent)
+            .accessibilityLabel("메뉴바에 고정됨")
+        }
+        Text(item.title)
+          .font(.system(size: 13.5, weight: .medium))
+          .foregroundStyle(BarRememberPalette.primaryText)
+          .lineLimit(1)
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+      .onTapGesture(count: 2, perform: beginEditing)
+      .help("더블 클릭하여 수정")
     }
   }
 
@@ -1120,6 +1236,18 @@ struct ReminderRow: View {
       }
     } else {
       HStack(spacing: 0) {
+        Button(action: onTogglePin) {
+          Image(systemName: isPinned ? "pin.slash" : "pin")
+            .font(.system(size: 11, weight: .semibold))
+            .frame(width: 24, height: 30)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isPinned ? BarRememberPalette.accent : BarRememberPalette.mutedText)
+        .disabled(interactionsDisabled)
+        .help(isPinned ? "메뉴바 고정 해제" : "메뉴바에 고정")
+        .accessibilityLabel(isPinned ? "메뉴바 고정 해제" : "메뉴바에 고정")
+
         Button(action: beginEditing) {
           Image(systemName: "pencil")
             .font(.system(size: 11, weight: .semibold))
@@ -1195,6 +1323,15 @@ struct ReminderRow: View {
     titleDraft = item.title
     hasDueDateDraft = item.dueDate != nil
     dueDateDraft = item.dueDate ?? Date()
+  }
+
+  private func focusTitleEditor() {
+    Task { @MainActor in
+      // Wait until the row is mounted in the popover window. This also makes
+      // the focus request reliable after the popover was repositioned.
+      await Task.yield()
+      isTitleFieldFocused = true
+    }
   }
 
   private var dragHandleImage: some View {
@@ -1344,7 +1481,10 @@ private struct EmptySelectionView: View {
       Image(systemName: "folder.badge.plus")
         .font(.system(size: 32, weight: .light))
         .foregroundStyle(BarRememberPalette.mutedText)
-      Text("\(section.title)에 연결된 목록이 없어요")
+      Text(AppLanguage.localized(
+        korean: "\(section.displayTitle)에 연결된 목록이 없어요",
+        english: "No lists are connected to \(section.displayTitle)"
+      ))
         .font(.headline)
         .foregroundStyle(BarRememberPalette.primaryText)
       Text("같은 이름의 Reminders 목록을 만들거나 기존 목록을 연결할 수 있습니다.")
@@ -1367,7 +1507,10 @@ private struct EmptySelectionView: View {
             Text("목록 만드는 중…")
           }
         } else {
-          Text("\(section.title) 목록 만들기")
+          Text(AppLanguage.localized(
+            korean: "\(section.displayTitle) 목록 만들기",
+            english: "Create \(section.displayTitle) list"
+          ))
         }
       }
       .buttonStyle(.borderedProminent)
@@ -1390,7 +1533,10 @@ private struct EmptyRemindersView: View {
       Image(systemName: "checkmark.circle.fill")
         .font(.system(size: 34, weight: .light))
         .foregroundStyle(BarRememberPalette.positive)
-      Text("\(section.title)에 남은 항목이 없어요")
+      Text(AppLanguage.localized(
+        korean: "\(section.displayTitle)에 남은 항목이 없어요",
+        english: "No remaining items in \(section.displayTitle)"
+      ))
         .font(.headline)
         .foregroundStyle(BarRememberPalette.primaryText)
       Text("위 입력창에서 새 항목을 바로 추가할 수 있습니다.")
@@ -1454,7 +1600,7 @@ private struct ListSelectionView: View {
                 Image(systemName: section.isDefault ? "checklist" : "folder")
                   .foregroundStyle(BarRememberPalette.accent)
                   .frame(width: 16)
-                Text(section.title)
+                Text(section.displayTitle)
                   .foregroundStyle(BarRememberPalette.primaryText)
                   .lineLimit(1)
                 if section.isDefault {
@@ -1474,7 +1620,10 @@ private struct ListSelectionView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(BarRememberPalette.secondaryText)
                 .help("공간 이름 변경")
-                .accessibilityLabel("\(section.title) 이름 변경")
+                .accessibilityLabel(AppLanguage.localized(
+                  korean: "\(section.displayTitle) 이름 변경",
+                  english: "Rename \(section.displayTitle)"
+                ))
 
                 if !section.isDefault {
                   Button {
@@ -1486,7 +1635,10 @@ private struct ListSelectionView: View {
                   .buttonStyle(.plain)
                   .foregroundStyle(BarRememberPalette.overdue)
                   .help("공간 삭제")
-                  .accessibilityLabel("\(section.title) 공간 삭제")
+                  .accessibilityLabel(AppLanguage.localized(
+                    korean: "\(section.displayTitle) 공간 삭제",
+                    english: "Delete \(section.displayTitle)"
+                  ))
                 }
               }
               .padding(.horizontal, 12)
@@ -1555,9 +1707,26 @@ private struct ListSelectionView: View {
               .font(.caption)
               .foregroundStyle(BarRememberPalette.secondaryText)
             ThemePicker(selection: $themeRawValue)
-              Text("Glass와 미드나이트는 반투명 material 위에 색을 더합니다.")
+              Text("글래스와 미드나이트는 반투명 material 위에 색을 더합니다.")
               .font(.caption2)
               .foregroundStyle(BarRememberPalette.mutedText)
+          }
+
+          Divider()
+
+          VStack(alignment: .leading, spacing: 8) {
+            Text("메뉴바")
+              .font(.caption)
+              .foregroundStyle(BarRememberPalette.secondaryText)
+            Toggle(
+              "고정한 할 일 제목 숨기기",
+              isOn: Binding(
+                get: { store.hidesPinnedReminderTitle },
+                set: { store.setHidesPinnedReminderTitle($0) }
+              )
+            )
+            .toggleStyle(.switch)
+            .foregroundStyle(BarRememberPalette.primaryText)
           }
 
           Divider()

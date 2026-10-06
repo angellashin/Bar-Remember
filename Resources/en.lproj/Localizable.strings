@@ -48,7 +48,7 @@
 "숨김" = "Hidden";
 "각 목록은 한 공간에만 표시됩니다." = "Each list can appear in one space only.";
 "앱 테마" = "App theme";
-"Glass와 미드나이트는 반투명 material 위에 색을 더합니다." = "Glass and Midnight add color to a translucent material.";
+"글래스와 미드나이트는 반투명 material 위에 색을 더합니다." = "Glass and Midnight add color to a translucent material.";
 "언어" = "Language";
 "아이콘 색상" = "Icon color";
 "완료 원에 적용됩니다." = "Applied to completion circles.";
@@ -79,3 +79,8 @@
 "눌러서 날짜를 직접 수정합니다." = "Click to edit the date.";
 "누르면 완료 처리 후 목록에서 사라집니다." = "Completes the item and removes it from this list.";
 "방금 완료한 할 일을 다시 목록에 표시합니다." = "Show the item you just completed in the list again.";
+"메뉴바" = "Menu bar";
+"고정한 할 일 제목 숨기기" = "Hide pinned reminder title";
+"메뉴바에 고정" = "Pin to menu bar";
+"메뉴바 고정 해제" = "Unpin from menu bar";
+"메뉴바에 고정됨" = "Pinned to menu bar";

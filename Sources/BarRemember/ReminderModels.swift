@@ -16,6 +16,17 @@ struct ReminderSection: Codable, Identifiable, Hashable, Sendable {
   }
 
   var isDefault: Bool { id == Self.tasksID }
+
+  var displayTitle: String {
+    switch id {
+    case Self.tasksID:
+      AppLanguage.localized(korean: "할 일", english: "Tasks")
+    case Self.legacyJobsID:
+      AppLanguage.localized(korean: "지원 공고", english: "Applications")
+    default:
+      title
+    }
+  }
 }
 
 struct ReminderSectionConfiguration: Codable, Equatable, Sendable {
@@ -119,16 +130,27 @@ struct ReminderListInfo: Identifiable, Hashable, Sendable {
 }
 
 enum ReminderListAssignmentPolicy {
+  static func migratedHiddenListIDs(
+    current assignments: [String: String],
+    availableLists: [ReminderListInfo],
+    hasConfiguredSelection: Bool
+  ) -> Set<String> {
+    guard hasConfiguredSelection else { return [] }
+    return Set(availableLists.map(\.id)).subtracting(assignments.keys)
+  }
+
   static func reconciledAssignments(
     current assignments: [String: String],
     sections: [ReminderSection],
     availableLists: [ReminderListInfo],
     legacyTaskListIDs: Set<String>,
     defaultID: String?,
-    hasConfiguredSelection: Bool
+    hasConfiguredSelection: Bool,
+    intentionallyHiddenListIDs: Set<String> = []
   ) -> [String: String] {
     let validSectionIDs = Set(sections.map(\.id))
-    let availableIDs = Set(availableLists.map(\.id))
+    let visibleLists = availableLists.filter { !intentionallyHiddenListIDs.contains($0.id) }
+    let availableIDs = Set(visibleLists.map(\.id))
     var reconciledAssignments = assignments.filter {
       availableIDs.contains($0.key) && validSectionIDs.contains($0.value)
     }
@@ -163,7 +185,7 @@ enum ReminderListAssignmentPolicy {
     for section in sections where !reconciledAssignments.values.contains(section.id) {
       guard let matchingList = firstUnassignedList(
         matching: section.title,
-        in: availableLists,
+        in: visibleLists,
         assignedIDs: Set(reconciledAssignments.keys)
       ) else {
         continue
@@ -242,14 +264,17 @@ enum ReminderNaturalLanguageDateParser {
     guard let normalizedInput = ReminderTitlePolicy.normalized(input) else { return nil }
 
     if let match = firstMatch(
-      pattern: #"(?:^|\s)(오늘|내일|모레)$"#,
+      pattern: #"(?:^|\s)(오늘|내일|모레|today|tomorrow|day after tomorrow)$"#,
       in: normalizedInput
     ), let relativeText = capture(1, from: match, in: normalizedInput) {
       let dayOffset: Int
-      switch relativeText {
+      switch relativeText.lowercased() {
       case "오늘": dayOffset = 0
       case "내일": dayOffset = 1
       case "모레": dayOffset = 2
+      case "today": dayOffset = 0
+      case "tomorrow": dayOffset = 1
+      case "day after tomorrow": dayOffset = 2
       default: return nil
       }
       let today = calendar.startOfDay(for: now)
@@ -427,19 +452,47 @@ struct ReminderEditDraft: Equatable, Sendable {
   let dueDateUpdate: ReminderDueDateUpdate
 }
 
+struct ReminderEditWrite: Equatable, Sendable {
+  let title: String?
+  let dueDateUpdate: ReminderDueDateUpdate
+
+  var isEmpty: Bool {
+    title == nil && dueDateUpdate == .unchanged
+  }
+}
+
+enum ReminderEditWritePolicy {
+  /// Only the fields that changed while this editor was open are written back.
+  /// This preserves a newer EventKit title or due date when the person edited
+  /// the other field in BarRemember.
+  static func changes(
+    original: ReminderItemSnapshot,
+    resolvedTitle: String,
+    dueDateUpdate: ReminderDueDateUpdate
+  ) -> ReminderEditWrite {
+    ReminderEditWrite(
+      title: resolvedTitle == original.title ? nil : resolvedTitle,
+      dueDateUpdate: dueDateUpdate
+    )
+  }
+}
+
 enum ReminderCreationDraftPolicy {
   static func resolve(
     title: String,
     manuallySelectedDueDate: Date?,
+    allowsDetectedDueDate: Bool = true,
     now: Date = Date(),
     calendar: Calendar = .current
   ) -> ReminderCreationDraft? {
     guard let normalizedTitle = ReminderTitlePolicy.normalized(title) else { return nil }
-    let parsedDate = ReminderNaturalLanguageDateParser.parse(
-      normalizedTitle,
-      now: now,
-      calendar: calendar
-    )
+    let parsedDate = allowsDetectedDueDate
+      ? ReminderNaturalLanguageDateParser.parse(
+        normalizedTitle,
+        now: now,
+        calendar: calendar
+      )
+      : nil
     return ReminderCreationDraft(
       title: parsedDate?.title ?? normalizedTitle,
       dueDate: manuallySelectedDueDate ?? parsedDate?.dueDate
@@ -496,12 +549,56 @@ enum ReminderDueDatePolicy {
 
   static func dateOnlyComponents(
     for date: Date,
-    calendar: Calendar = .current
+    timeZone: TimeZone = .current
   ) -> DateComponents {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = timeZone
     var components = calendar.dateComponents([.year, .month, .day], from: date)
     components.calendar = calendar
-    components.timeZone = calendar.timeZone
+    components.timeZone = timeZone
     return components
+  }
+}
+
+enum ReminderDateDetectionPolicy {
+  static func detectedDate(
+    in title: String,
+    hasManuallySelectedDueDate: Bool,
+    isDetectionSuppressed: Bool,
+    now: Date = Date(),
+    calendar: Calendar = .current
+  ) -> ParsedReminderDate? {
+    guard !hasManuallySelectedDueDate, !isDetectionSuppressed else { return nil }
+    return ReminderNaturalLanguageDateParser.parse(title, now: now, calendar: calendar)
+  }
+}
+
+enum QuickAddSubmissionPolicy {
+  static func shouldResetDraft(
+    submittedTitle: String,
+    submittedHasDueDate: Bool,
+    submittedDueDate: Date,
+    currentTitle: String,
+    currentHasDueDate: Bool,
+    currentDueDate: Date
+  ) -> Bool {
+    submittedTitle == currentTitle
+      && submittedHasDueDate == currentHasDueDate
+      && submittedDueDate == currentDueDate
+  }
+}
+
+enum MenuBarPinnedReminderPolicy {
+  static let maximumDisplayCharacters = 28
+
+  static func displayTitle(_ title: String, maximumCharacters: Int = maximumDisplayCharacters) -> String {
+    guard title.count > maximumCharacters, maximumCharacters > 1 else { return title }
+    return String(title.prefix(maximumCharacters - 1)) + "…"
+  }
+
+  static func reconciledPinnedID(_ pinnedID: String?, availableIDs: Set<String>) -> String? {
+    guard let pinnedID, availableIDs.contains(pinnedID) else { return nil }
+    return pinnedID
   }
 }
 

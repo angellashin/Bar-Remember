@@ -15,12 +15,12 @@ enum ReminderIconColor: String, CaseIterable, Identifiable {
 
   var title: String {
     switch self {
-    case .indigo: "인디고"
-    case .blue: "블루"
-    case .teal: "틸"
-    case .green: "그린"
-    case .orange: "오렌지"
-    case .rose: "로즈"
+    case .indigo: AppLanguage.localized(korean: "인디고", english: "Indigo")
+    case .blue: AppLanguage.localized(korean: "블루", english: "Blue")
+    case .teal: AppLanguage.localized(korean: "틸", english: "Teal")
+    case .green: AppLanguage.localized(korean: "그린", english: "Green")
+    case .orange: AppLanguage.localized(korean: "오렌지", english: "Orange")
+    case .rose: AppLanguage.localized(korean: "로즈", english: "Rose")
     }
   }
 
@@ -45,19 +45,19 @@ enum BarRememberTheme: String, CaseIterable, Identifiable {
 
   var title: String {
     switch self {
-    case .system: "시스템"
-    case .glass: "Glass"
-    case .midnight: "미드나이트"
-    case .paper: "페이퍼"
+    case .system: AppLanguage.localized(korean: "시스템", english: "System")
+    case .glass: AppLanguage.localized(korean: "글래스", english: "Glass")
+    case .midnight: AppLanguage.localized(korean: "미드나이트", english: "Midnight")
+    case .paper: AppLanguage.localized(korean: "페이퍼", english: "Paper")
     }
   }
 
   var description: String {
     switch self {
-    case .system: "기본 macOS material"
-    case .glass: "반투명 유리와 부드러운 블러"
-    case .midnight: "어두운 네이비 글래스"
-    case .paper: "따뜻하고 불투명한 표면"
+    case .system: AppLanguage.localized(korean: "기본 macOS material", english: "Default macOS material")
+    case .glass: AppLanguage.localized(korean: "반투명 글래스와 부드러운 블러", english: "Translucent glass with a soft blur")
+    case .midnight: AppLanguage.localized(korean: "어두운 네이비 글래스", english: "Dark navy glass")
+    case .paper: AppLanguage.localized(korean: "따뜻하고 불투명한 표면", english: "Warm, opaque surface")
     }
   }
 

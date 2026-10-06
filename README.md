@@ -40,7 +40,7 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 
 - macOS 14 Sonoma or later
 - Apple Reminders enabled in iCloud (recommended for sync across devices)
-- Swift 6.2 or Xcode 16.4+ to build from source
+- Xcode 26.0+ (which includes Swift 6.2) to build from source
 
 BarRemember requests Reminders access through EventKit on first launch. The app does not upload reminder data or require a separate service account.
 
@@ -56,7 +56,7 @@ open dist/BarRemember.app
 
 The script creates a signed-for-local-use app at `dist/BarRemember.app`. macOS may ask you to approve Reminders access in **System Settings → Privacy & Security → Reminders**.
 
-For development, open the repository in Xcode or run the test suite with the Xcode toolchain:
+For development, open the repository in Xcode 26 or later, or run the test suite with the active Xcode toolchain:
 
 ```sh
 swift test
@@ -69,7 +69,7 @@ swift test
 3. Manual ordering is stored locally because EventKit does not expose an arbitrary custom order for Reminders items.
 4. Changes made in BarRemember are written back to Apple Reminders immediately.
 
-The date parser is a small, predictable rules engine. It recognizes explicit numeric dates (`9/28`, `2026-09-28`) and a small set of relative words in Korean and English. It does not call an AI model.
+The date parser is a small, predictable rules engine. It recognizes explicit numeric dates (`9/28`, `2026-09-28`) and the relative suffixes `today`, `tomorrow`, `day after tomorrow`, `오늘`, `내일`, and `모레`. It does not call an AI model.
 
 ### Type a date at the end of any item
 
@@ -78,6 +78,7 @@ Date detection works in every BarRemember space and in both flows: adding a new 
 ```text
 Prepare interview notes 9/28
 Send the proposal tomorrow
+Review the landing page today
 Team offsite 2026-10-14
 ```
 

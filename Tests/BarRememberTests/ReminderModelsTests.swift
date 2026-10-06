@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 
@@ -121,6 +122,42 @@ struct ReminderModelsTests {
     #expect(assignments["old-jobs-id"] == nil)
   }
 
+  @Test func explicitlyHiddenListIsNotReconnectedByItsMatchingSectionTitle() {
+    let lists = [
+      ReminderListInfo(id: "tasks-list", title: "할 일", tint: .accent, canModify: true),
+    ]
+
+    let assignments = ReminderListAssignmentPolicy.reconciledAssignments(
+      current: [:],
+      sections: [.tasks],
+      availableLists: lists,
+      legacyTaskListIDs: [],
+      defaultID: "tasks-list",
+      hasConfiguredSelection: true,
+      intentionallyHiddenListIDs: ["tasks-list"]
+    )
+
+    #expect(assignments.isEmpty)
+  }
+
+  @Test func existingConfiguredSelectionMigratesUnassignedListsToHidden() {
+    let lists = [
+      ReminderListInfo(id: "connected", title: "Work", tint: .accent, canModify: true),
+      ReminderListInfo(id: "hidden", title: "Tasks", tint: .accent, canModify: true),
+    ]
+
+    #expect(ReminderListAssignmentPolicy.migratedHiddenListIDs(
+      current: ["connected": ReminderSection.tasksID],
+      availableLists: lists,
+      hasConfiguredSelection: true
+    ) == ["hidden"])
+    #expect(ReminderListAssignmentPolicy.migratedHiddenListIDs(
+      current: ["connected": ReminderSection.tasksID],
+      availableLists: lists,
+      hasConfiguredSelection: false
+    ).isEmpty)
+  }
+
   @Test func staleLegacyTaskSelectionFallsBackToTheDefaultList() {
     let lists = [
       ReminderListInfo(id: "default-list", title: "미리 알림", tint: .accent, canModify: true),
@@ -200,6 +237,26 @@ struct ReminderModelsTests {
     }
   }
 
+  @Test func dateParserUnderstandsDocumentedEnglishRelativeDays() throws {
+    let calendar = try seoulCalendar()
+    let now = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 14))
+    )
+    let cases = [
+      ("Review landing page today", 23),
+      ("Send design feedback tomorrow", 24),
+      ("Read SwiftUI notes day after tomorrow", 25),
+    ]
+
+    for (input, day) in cases {
+      let parsed = try #require(
+        ReminderNaturalLanguageDateParser.parse(input, now: now, calendar: calendar)
+      )
+      #expect(parsed.title != input)
+      #expect(calendar.component(.day, from: parsed.dueDate) == day)
+    }
+  }
+
   @Test func yearlessPastDateMovesToTheNextCalendarYear() throws {
     let calendar = try seoulCalendar()
     let now = try #require(
@@ -268,6 +325,31 @@ struct ReminderModelsTests {
     #expect(resolved.dueDate == manualDate)
   }
 
+  @Test func suppressingDetectedDateKeepsTheTypedSuffixAsPlainTitle() throws {
+    let calendar = try seoulCalendar()
+    let now = try #require(
+      calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 14))
+    )
+    let title = "Send design feedback tomorrow"
+
+    #expect(ReminderDateDetectionPolicy.detectedDate(
+      in: title,
+      hasManuallySelectedDueDate: false,
+      isDetectionSuppressed: true,
+      now: now,
+      calendar: calendar
+    ) == nil)
+    let draft = try #require(ReminderCreationDraftPolicy.resolve(
+      title: title,
+      manuallySelectedDueDate: nil,
+      allowsDetectedDueDate: false,
+      now: now,
+      calendar: calendar
+    ))
+    #expect(draft.title == title)
+    #expect(draft.dueDate == nil)
+  }
+
   @Test func editingWithTrailingDateCleansTitleAndSetsTheDetectedDate() throws {
     let calendar = try seoulCalendar()
     let now = try #require(
@@ -298,7 +380,7 @@ struct ReminderModelsTests {
       calendar.date(from: DateComponents(year: 2026, month: 8, day: 21, hour: 17, minute: 45))
     )
 
-    let components = ReminderDueDatePolicy.dateOnlyComponents(for: date, calendar: calendar)
+    let components = ReminderDueDatePolicy.dateOnlyComponents(for: date, timeZone: calendar.timeZone)
 
     #expect(components.year == 2026)
     #expect(components.month == 8)
@@ -307,6 +389,99 @@ struct ReminderModelsTests {
     #expect(components.minute == nil)
     #expect(components.calendar?.identifier == .gregorian)
     #expect(components.timeZone == calendar.timeZone)
+  }
+
+  @Test func dateOnlyComponentsAlwaysUseTheGregorianCalendar() throws {
+    var buddhistCalendar = Calendar(identifier: .buddhist)
+    buddhistCalendar.timeZone = try #require(TimeZone(identifier: "Asia/Seoul"))
+    let date = try #require(
+      buddhistCalendar.date(from: DateComponents(year: 2569, month: 8, day: 21))
+    )
+
+    let components = ReminderDueDatePolicy.dateOnlyComponents(
+      for: date,
+      timeZone: buddhistCalendar.timeZone
+    )
+
+    #expect(components.calendar?.identifier == .gregorian)
+    #expect(components.year == 2026)
+    #expect(components.month == 8)
+    #expect(components.day == 21)
+  }
+
+  @Test func editWriteOnlyIncludesFieldsChangedFromTheOpeningSnapshot() {
+    let original = item(id: "reminder", title: "Original title", dueDate: Date())
+    let dueDateChange = ReminderDueDateUpdate.remove
+
+    let write = ReminderEditWritePolicy.changes(
+      original: original,
+      resolvedTitle: original.title,
+      dueDateUpdate: dueDateChange
+    )
+
+    #expect(write.title == nil)
+    #expect(write.dueDateUpdate == dueDateChange)
+  }
+
+  @Test func quickAddCompletionDoesNotClearAReplacementDraft() {
+    #expect(!QuickAddSubmissionPolicy.shouldResetDraft(
+      submittedTitle: "Review landing page",
+      submittedHasDueDate: false,
+      submittedDueDate: Date(timeIntervalSince1970: 10),
+      currentTitle: "Read SwiftUI notes",
+      currentHasDueDate: false,
+      currentDueDate: Date(timeIntervalSince1970: 11)
+    ))
+    #expect(QuickAddSubmissionPolicy.shouldResetDraft(
+      submittedTitle: "Review landing page",
+      submittedHasDueDate: false,
+      submittedDueDate: Date(timeIntervalSince1970: 10),
+      currentTitle: "Review landing page",
+      currentHasDueDate: false,
+      currentDueDate: Date(timeIntervalSince1970: 10)
+    ))
+  }
+
+  @Test func pinnedMenuBarTitleTruncatesWithoutChangingTheReminderTitle() {
+    let title = "Read SwiftUI notes and prepare a detailed design review for the team"
+    let display = MenuBarPinnedReminderPolicy.displayTitle(title, maximumCharacters: 18)
+
+    #expect(display == "Read SwiftUI note…")
+    #expect(title.hasPrefix(display.dropLast()))
+  }
+
+  @Test func pinnedReminderClearsWhenCompletionOrAnExternalReloadRemovesIt() {
+    #expect(MenuBarPinnedReminderPolicy.reconciledPinnedID(
+      "pinned",
+      availableIDs: ["other"]
+    ) == nil)
+    #expect(MenuBarPinnedReminderPolicy.reconciledPinnedID(
+      "pinned",
+      availableIDs: ["pinned", "other"]
+    ) == "pinned")
+  }
+
+  @Test func openPopoverReanchorsWhenItsStatusItemWidthChanges() {
+    #expect(MenuBarPopoverAnchorPolicy.shouldReposition(
+      popoverIsShown: true,
+      previousStatusItemLength: 190,
+      newStatusItemLength: NSStatusItem.squareLength
+    ))
+    #expect(MenuBarPopoverAnchorPolicy.shouldReposition(
+      popoverIsShown: true,
+      previousStatusItemLength: NSStatusItem.squareLength,
+      newStatusItemLength: 190
+    ))
+    #expect(!MenuBarPopoverAnchorPolicy.shouldReposition(
+      popoverIsShown: false,
+      previousStatusItemLength: 190,
+      newStatusItemLength: NSStatusItem.squareLength
+    ))
+    #expect(!MenuBarPopoverAnchorPolicy.shouldReposition(
+      popoverIsShown: true,
+      previousStatusItemLength: 190,
+      newStatusItemLength: 190
+    ))
   }
 
   @Test func existingReminderDateUpdatePreservesTimeUntilTheDayChanges() throws {

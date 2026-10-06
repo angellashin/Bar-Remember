@@ -9,9 +9,11 @@
         <string>ko</string>
         <string>en</string>
     </array>
-    <key>CFBundleDisplayName</key>
-    <string>BarRemember</string>
-    <key>CFBundleExecutable</key>
+  <key>CFBundleDisplayName</key>
+  <string>BarRemember</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
+  <key>CFBundleExecutable</key>
     <string>BarRemember</string>
     <key>CFBundleIdentifier</key>
     <string>com.shinminseo.BarRemember</string>

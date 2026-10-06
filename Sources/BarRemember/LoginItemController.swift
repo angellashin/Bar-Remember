@@ -31,7 +31,10 @@ final class LoginItemController: ObservableObject {
       refresh()
     } catch {
       refresh()
-      errorMessage = "로그인 시 실행 설정을 변경하지 못했습니다: \(error.localizedDescription)"
+      errorMessage = AppLanguage.localized(
+        korean: "로그인 시 실행 설정을 변경하지 못했습니다: \(error.localizedDescription)",
+        english: "Could not change the launch-at-login setting: \(error.localizedDescription)"
+      )
     }
   }
 

@@ -16,7 +16,7 @@ final class ReminderStore: ObservableObject {
   @Published private(set) var isUndoingCompletion = false
   @Published private(set) var isLoading = false
   @Published private(set) var pinnedReminderID: String?
-  @Published private(set) var hidesPinnedReminderTitle: Bool
+  @Published private(set) var pinnedReminderTitleDisplayMode: MenuBarPinnedTitleDisplayMode
   @Published private var activeAddListIDs: [String: String] = [:]
   @Published var errorMessage: String?
 
@@ -29,6 +29,7 @@ final class ReminderStore: ObservableObject {
   private let hiddenListIDsKey = "intentionallyHiddenReminderListIDsV1"
   private let pinnedReminderIDKey = "pinnedReminderID"
   private let hidesPinnedReminderTitleKey = "hidesPinnedReminderTitle"
+  private let pinnedReminderTitleDisplayModeKey = "pinnedReminderTitleDisplayModeV1"
   private let hasMigratedHiddenListIDsKey = "hasMigratedHiddenReminderListIDsV1"
   private let reminderOrderIDsKey = "manualReminderOrderIDs"
   private var eventStoreObserver: NSObjectProtocol?
@@ -48,7 +49,15 @@ final class ReminderStore: ObservableObject {
       defaults.stringArray(forKey: hiddenListIDsKey) ?? []
     )
     self.pinnedReminderID = defaults.string(forKey: pinnedReminderIDKey)
-    self.hidesPinnedReminderTitle = defaults.bool(forKey: hidesPinnedReminderTitleKey)
+    let storedDisplayMode = defaults.string(forKey: pinnedReminderTitleDisplayModeKey)
+    let displayMode = MenuBarPinnedTitleDisplayMode.resolved(
+      storedRawValue: storedDisplayMode,
+      legacyHidesPinnedTitle: defaults.bool(forKey: hidesPinnedReminderTitleKey)
+    )
+    self.pinnedReminderTitleDisplayMode = displayMode
+    if MenuBarPinnedTitleDisplayMode(rawValue: storedDisplayMode ?? "") == nil {
+      defaults.set(displayMode.rawValue, forKey: pinnedReminderTitleDisplayModeKey)
+    }
 
     persistSectionConfiguration()
     updateAuthorizationState()
@@ -92,9 +101,9 @@ final class ReminderStore: ObservableObject {
     defaults.set(pinnedReminderID, forKey: pinnedReminderIDKey)
   }
 
-  func setHidesPinnedReminderTitle(_ hidesTitle: Bool) {
-    hidesPinnedReminderTitle = hidesTitle
-    defaults.set(hidesTitle, forKey: hidesPinnedReminderTitleKey)
+  func setPinnedReminderTitleDisplayMode(_ displayMode: MenuBarPinnedTitleDisplayMode) {
+    pinnedReminderTitleDisplayMode = displayMode
+    defaults.set(displayMode.rawValue, forKey: pinnedReminderTitleDisplayModeKey)
   }
 
   func selectedListIDs(for section: ReminderSection) -> Set<String> {

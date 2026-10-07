@@ -450,6 +450,79 @@ struct ReminderModelsTests {
     #expect(title.hasPrefix(display.dropLast()))
   }
 
+  @Test func pinnedMenuBarDisplayModeMigratesTheExistingHiddenTitlePreference() {
+    #expect(MenuBarPinnedTitleDisplayMode.resolved(
+      storedRawValue: nil,
+      legacyHidesPinnedTitle: true
+    ) == .iconOnly)
+    #expect(MenuBarPinnedTitleDisplayMode.resolved(
+      storedRawValue: nil,
+      legacyHidesPinnedTitle: false
+    ) == .shortTitle)
+    #expect(MenuBarPinnedTitleDisplayMode.resolved(
+      storedRawValue: MenuBarPinnedTitleDisplayMode.longTitle.rawValue,
+      legacyHidesPinnedTitle: true
+    ) == .longTitle)
+  }
+
+  @Test func pinnedMenuBarPresentationMeasuresAndCapsEnglishKoreanAndEmojiTitles() {
+    let font = NSFont.menuBarFont(ofSize: 0)
+    let cases = [
+      "Read notes for tomorrow's design review",
+      "내일 디자인 검토 자료 정리하기",
+      "📝 Prepare the launch checklist with the whole team"
+    ]
+
+    for title in cases {
+      let short = MenuBarPinnedTitlePresentationPolicy.presentation(
+        for: title,
+        displayMode: .shortTitle,
+        font: font,
+        imageWidth: 16,
+        squareLength: NSStatusItem.squareLength
+      )
+      let long = MenuBarPinnedTitlePresentationPolicy.presentation(
+        for: title,
+        displayMode: .longTitle,
+        font: font,
+        imageWidth: 16,
+        squareLength: NSStatusItem.squareLength
+      )
+      #expect(short.statusItemLength <= MenuBarPinnedTitlePresentationPolicy.shortTitleMaximumLength)
+      #expect(long.statusItemLength <= MenuBarPinnedTitlePresentationPolicy.longTitleMaximumLength)
+      #expect(short.displayTitle.hasPrefix(" "))
+      #expect(long.displayTitle.hasPrefix(" "))
+      #expect(
+        MenuBarPinnedTitlePresentationPolicy.measuredWidth(of: short.displayTitle, font: font)
+          + max(16, font.capHeight)
+          + MenuBarPinnedTitlePresentationPolicy.imageAndPaddingWidth
+          <= MenuBarPinnedTitlePresentationPolicy.shortTitleMaximumLength
+      )
+      #expect(
+        MenuBarPinnedTitlePresentationPolicy.measuredWidth(of: long.displayTitle, font: font)
+          + max(16, font.capHeight)
+          + MenuBarPinnedTitlePresentationPolicy.imageAndPaddingWidth
+          <= MenuBarPinnedTitlePresentationPolicy.longTitleMaximumLength
+      )
+    }
+
+    let iconOnly = MenuBarPinnedTitlePresentationPolicy.presentation(
+      for: "고정한 제목",
+      displayMode: .iconOnly,
+      font: font,
+      imageWidth: 16,
+      squareLength: NSStatusItem.squareLength
+    )
+    #expect(iconOnly.displayTitle.isEmpty)
+    #expect(iconOnly.statusItemLength == NSStatusItem.squareLength)
+  }
+
+  @Test func pinnedMenuBarDisplayModeLabelsAreLocalized() {
+    #expect(MenuBarPinnedTitleDisplayMode.iconOnly.localizedTitle(language: .korean) == "아이콘만")
+    #expect(MenuBarPinnedTitleDisplayMode.shortTitle.localizedTitle(language: .english) == "Short title")
+    #expect(MenuBarPinnedTitleDisplayMode.longTitle.localizedTitle(language: .korean) == "긴 제목")
+  }
+
   @Test func pinnedReminderClearsWhenCompletionOrAnExternalReloadRemovesIt() {
     #expect(MenuBarPinnedReminderPolicy.reconciledPinnedID(
       "pinned",
@@ -481,6 +554,14 @@ struct ReminderModelsTests {
       popoverIsShown: true,
       previousStatusItemLength: 190,
       newStatusItemLength: 190
+    ))
+    #expect(MenuBarPopoverAnchorPolicy.shouldReanchor(
+      lastAnchoredScreenRect: NSRect(x: 100, y: 900, width: 24, height: 24),
+      currentScreenRect: NSRect(x: 60, y: 900, width: 120, height: 24)
+    ))
+    #expect(!MenuBarPopoverAnchorPolicy.shouldReanchor(
+      lastAnchoredScreenRect: NSRect(x: 60, y: 900, width: 120, height: 24),
+      currentScreenRect: NSRect(x: 60, y: 900, width: 120, height: 24)
     ))
   }
 

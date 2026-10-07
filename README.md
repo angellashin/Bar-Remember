@@ -31,7 +31,7 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 - Complete an item directly from the popover, with a short undo action when you clicked by mistake.
 - Add, edit, reorder, and delete due dates without opening the full Reminders app.
 - Detect clear date suffixes such as `application deadline 9/28` or `Send proposal tomorrow` using deterministic rules, not AI.
-- Pin one reminder to the menu bar at a time. You can hide its title; long titles are shortened only in the menu bar, never in Reminders. Completing a pinned item unpins it and returns to the normal icon without automatically pinning another item.
+- Pin one reminder to the menu bar at a time, then unpin it from the reminder row or the pinned banner. Choose **Icon only**, **Short title** (up to about 120 pt), or **Long title** (up to about 160 pt); shortening affects only the menu bar, never the reminder in Apple Reminders. Completing a pinned item unpins it and returns to the normal icon without automatically pinning another item.
 - Choose a completion-circle color and switch between System, Paper, Glass, and Midnight themes.
 - Glass uses a clear, behind-window material and a light border so the real desktop background softly shows through.
 - English and Korean UI with a language switch in Settings.
@@ -86,6 +86,18 @@ Team offsite 2026-10-14
 ```
 
 BarRemember removes the recognized suffix from the title and stores it as the due date. This works for the default Tasks space and any custom space, including items backed by different Reminders lists. If you choose a date manually, the manual date takes precedence.
+
+### Keep one reminder in the menu bar
+
+Use the pin button on a reminder row to manually keep that one item visible in the menu bar. Pinning a different item replaces the previous pin; BarRemember never selects or pins another reminder automatically. Use the pin button again, or the unpin button in the pinned banner, to return to the normal menu-bar icon.
+
+In **Settings → Menu bar**, choose how much of the pinned title to show:
+
+- **Icon only** keeps the menu bar as compact as possible.
+- **Short title** is the default and measures the current menu-bar font, including the icon and padding, before limiting the item to about 120 pt.
+- **Long title** uses the same measurement and a wider limit of about 160 pt.
+
+Long titles are shortened with an ellipsis only in the menu bar. macOS controls the shared menu-bar layout, so choosing a smaller mode reduces BarRemember's footprint but cannot guarantee that other status items will never be hidden on a crowded menu bar.
 
 ## Localization
 

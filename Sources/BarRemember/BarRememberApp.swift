@@ -12,8 +12,17 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   private var popover: NSPopover?
   private var remindersSubscription: AnyCancellable?
   private var outsideClickMonitor: Any?
+  private var statusItemFrameObserver: NSObjectProtocol?
+  private var statusWindowMoveObserver: NSObjectProtocol?
+  private weak var observedStatusWindow: NSWindow?
   private var statusItemLength: CGFloat?
   private var isPopoverRepositionScheduled = false
+  private var popoverRepositionAttempts = 0
+  private var stableAnchorObservationCount = 0
+  private var lastObservedStatusItemScreenRect: NSRect?
+  private var lastPopoverAnchorScreenRect: NSRect?
+
+  private let maximumPopoverRepositionAttempts = 3
 
   static func main() {
     let application = NSApplication.shared
@@ -35,6 +44,14 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
       NSEvent.removeMonitor(outsideClickMonitor)
     }
     outsideClickMonitor = nil
+    if let statusItemFrameObserver {
+      NotificationCenter.default.removeObserver(statusItemFrameObserver)
+    }
+    statusItemFrameObserver = nil
+    if let statusWindowMoveObserver {
+      NotificationCenter.default.removeObserver(statusWindowMoveObserver)
+    }
+    statusWindowMoveObserver = nil
     remindersSubscription?.cancel()
   }
 
@@ -52,10 +69,11 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
     button.title = ""
     button.toolTip = "BarRemember"
     statusItem = item
+    installStatusItemPositionObservers(for: button)
     updateStatusItem(
       count: reminderStore.reminders.count,
       pinnedReminder: reminderStore.pinnedReminder,
-      hidesPinnedTitle: reminderStore.hidesPinnedReminderTitle
+      displayMode: reminderStore.pinnedReminderTitleDisplayMode
     )
   }
 
@@ -76,14 +94,14 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
     remindersSubscription = Publishers.CombineLatest3(
       reminderStore.$reminders,
       reminderStore.$pinnedReminderID,
-      reminderStore.$hidesPinnedReminderTitle
+      reminderStore.$pinnedReminderTitleDisplayMode
     )
       .receive(on: RunLoop.main)
-      .sink { [weak self] reminders, _, hidesPinnedTitle in
+      .sink { [weak self] reminders, _, displayMode in
         self?.updateStatusItem(
           count: reminders.count,
           pinnedReminder: self?.reminderStore.pinnedReminder,
-          hidesPinnedTitle: hidesPinnedTitle
+          displayMode: displayMode
         )
       }
   }
@@ -91,16 +109,24 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   private func updateStatusItem(
     count: Int,
     pinnedReminder: ReminderItemSnapshot?,
-    hidesPinnedTitle: Bool
+    displayMode: MenuBarPinnedTitleDisplayMode
   ) {
     guard let statusItem, let button = statusItem.button else { return }
-    let pinnedTitle = pinnedReminder.map { MenuBarPinnedReminderPolicy.displayTitle($0.title) }
     button.image = NSImage(
       systemSymbolName: pinnedReminder == nil ? (count == 0 ? "checkmark.circle" : "checklist") : "pin.fill",
       accessibilityDescription: "BarRemember"
     )
-    button.title = pinnedTitle.map { hidesPinnedTitle ? "" : " \($0)" } ?? (count > 0 ? " \(count)" : "")
-    let newStatusItemLength = pinnedTitle == nil || hidesPinnedTitle ? NSStatusItem.squareLength : 190
+    let pinnedTitlePresentation = pinnedReminder.map {
+      MenuBarPinnedTitlePresentationPolicy.presentation(
+        for: $0.title,
+        displayMode: displayMode,
+        font: button.font ?? NSFont.menuBarFont(ofSize: 0),
+        imageWidth: button.image?.size.width ?? 0,
+        squareLength: NSStatusItem.squareLength
+      )
+    }
+    button.title = pinnedTitlePresentation?.displayTitle ?? (count > 0 ? " \(count)" : "")
+    let newStatusItemLength = pinnedTitlePresentation?.statusItemLength ?? NSStatusItem.squareLength
     let shouldRepositionPopover = MenuBarPopoverAnchorPolicy.shouldReposition(
       popoverIsShown: popover?.isShown == true,
       previousStatusItemLength: statusItemLength,
@@ -108,6 +134,7 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
     )
     statusItem.length = newStatusItemLength
     statusItemLength = newStatusItemLength
+    installStatusWindowMoveObserver(for: button)
     button.setAccessibilityLabel(
       pinnedReminder.map { $0.title }
         ?? (count == 0
@@ -138,6 +165,19 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func schedulePopoverReposition() {
+    beginPopoverRepositionObservation()
+  }
+
+  private func beginPopoverRepositionObservation() {
+    guard let panel = popover, panel.isShown, let button = statusItem?.button else { return }
+    installStatusWindowMoveObserver(for: button)
+    popoverRepositionAttempts = 0
+    stableAnchorObservationCount = 0
+    lastObservedStatusItemScreenRect = statusItemScreenRect(for: button)
+    schedulePopoverRepositionObservation()
+  }
+
+  private func schedulePopoverRepositionObservation() {
     guard !isPopoverRepositionScheduled else { return }
     isPopoverRepositionScheduled = true
 
@@ -145,22 +185,93 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
       guard let self else { return }
       self.isPopoverRepositionScheduled = false
       guard let panel = self.popover, panel.isShown, let button = self.statusItem?.button else { return }
+      guard let currentScreenRect = self.statusItemScreenRect(for: button) else { return }
 
-      // NSStatusBar lays out an item's new width on the next main-loop turn. Re-showing an
-      // already visible popover updates its positioning rect without closing its content.
-      button.superview?.layoutSubtreeIfNeeded()
-      button.layoutSubtreeIfNeeded()
-      self.showPopover(panel, relativeTo: button)
-      self.configurePopoverWindow(panel)
-      // Repositioning an already-visible NSPopover can resign its window. Restore
-      // key-window status without closing it so the in-place title editor keeps
-      // accepting keyboard input and preserves its draft/selection.
-      panel.contentViewController?.view.window?.becomeKey()
+      self.popoverRepositionAttempts += 1
+      if self.lastObservedStatusItemScreenRect == currentScreenRect {
+        self.stableAnchorObservationCount += 1
+      } else {
+        self.lastObservedStatusItemScreenRect = currentScreenRect
+        self.stableAnchorObservationCount = 0
+      }
+
+      // Require two consecutive deferred observations before updating the popover. The
+      // status-bar host can move after its button has received the new width.
+      let isStable = self.stableAnchorObservationCount >= 2
+      if isStable && MenuBarPopoverAnchorPolicy.shouldReanchor(
+          lastAnchoredScreenRect: self.lastPopoverAnchorScreenRect,
+          currentScreenRect: currentScreenRect
+      )
+      {
+        self.reanchorPopover(panel, relativeTo: button, screenRect: currentScreenRect)
+        return
+      }
+
+      if self.popoverRepositionAttempts < self.maximumPopoverRepositionAttempts {
+        self.schedulePopoverRepositionObservation()
+      }
     }
   }
 
   private func showPopover(_ panel: NSPopover, relativeTo button: NSStatusBarButton) {
     panel.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    lastPopoverAnchorScreenRect = statusItemScreenRect(for: button)
+  }
+
+  private func reanchorPopover(
+    _ panel: NSPopover,
+    relativeTo button: NSStatusBarButton,
+    screenRect: NSRect
+  ) {
+    let previousFirstResponder = panel.contentViewController?.view.window?.firstResponder
+    // Re-showing an already-visible popover updates its positioning rect without closing the
+    // SwiftUI hierarchy. This preserves the Quick Add and editor drafts.
+    showPopover(panel, relativeTo: button)
+    configurePopoverWindow(panel)
+    if let window = panel.contentViewController?.view.window {
+      window.makeKey()
+      if let previousFirstResponder {
+        window.makeFirstResponder(previousFirstResponder)
+      }
+    }
+    lastPopoverAnchorScreenRect = screenRect
+  }
+
+  private func installStatusItemPositionObservers(for button: NSStatusBarButton) {
+    button.postsFrameChangedNotifications = true
+    statusItemFrameObserver = NotificationCenter.default.addObserver(
+      forName: NSView.frameDidChangeNotification,
+      object: button,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.beginPopoverRepositionObservation()
+      }
+    }
+    installStatusWindowMoveObserver(for: button)
+  }
+
+  private func installStatusWindowMoveObserver(for button: NSStatusBarButton) {
+    guard let window = button.window, observedStatusWindow !== window else { return }
+    if let statusWindowMoveObserver {
+      NotificationCenter.default.removeObserver(statusWindowMoveObserver)
+    }
+    observedStatusWindow = window
+    statusWindowMoveObserver = NotificationCenter.default.addObserver(
+      forName: NSWindow.didMoveNotification,
+      object: window,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.beginPopoverRepositionObservation()
+      }
+    }
+  }
+
+  private func statusItemScreenRect(for button: NSStatusBarButton) -> NSRect? {
+    guard let window = button.window, window.isVisible else { return nil }
+    let rectInWindow = button.convert(button.bounds, to: nil)
+    return window.convertToScreen(rectInWindow)
   }
 
   private func configurePopoverWindow(_ panel: NSPopover) {
@@ -194,5 +305,73 @@ enum MenuBarPopoverAnchorPolicy {
     newStatusItemLength: CGFloat
   ) -> Bool {
     popoverIsShown && previousStatusItemLength != newStatusItemLength
+  }
+
+  static func shouldReanchor(
+    lastAnchoredScreenRect: NSRect?,
+    currentScreenRect: NSRect
+  ) -> Bool {
+    lastAnchoredScreenRect != currentScreenRect
+  }
+}
+
+struct MenuBarPinnedTitlePresentation: Equatable {
+  let displayTitle: String
+  let statusItemLength: CGFloat
+}
+
+enum MenuBarPinnedTitlePresentationPolicy {
+  static let shortTitleMaximumLength: CGFloat = 120
+  static let longTitleMaximumLength: CGFloat = 160
+  static let imageAndPaddingWidth: CGFloat = 28
+
+  static func presentation(
+    for title: String,
+    displayMode: MenuBarPinnedTitleDisplayMode,
+    font: NSFont,
+    imageWidth: CGFloat,
+    squareLength: CGFloat
+  ) -> MenuBarPinnedTitlePresentation {
+    guard displayMode != .iconOnly else {
+      return MenuBarPinnedTitlePresentation(displayTitle: "", statusItemLength: squareLength)
+    }
+
+    let maximumLength = displayMode == .shortTitle
+      ? shortTitleMaximumLength
+      : longTitleMaximumLength
+    let titleBudget = max(
+      1,
+      maximumLength
+        - max(imageWidth, font.capHeight)
+        - imageAndPaddingWidth
+        - measuredWidth(of: " ", font: font)
+    )
+    let displayTitle = ellipsized(title, toFit: titleBudget, font: font)
+    let requiredLength = max(
+      squareLength,
+      ceil(measuredWidth(of: " \(displayTitle)", font: font) + max(imageWidth, font.capHeight) + imageAndPaddingWidth)
+    )
+    return MenuBarPinnedTitlePresentation(
+      displayTitle: " \(displayTitle)",
+      statusItemLength: min(maximumLength, requiredLength)
+    )
+  }
+
+  static func ellipsized(_ title: String, toFit maximumWidth: CGFloat, font: NSFont) -> String {
+    guard measuredWidth(of: title, font: font) > maximumWidth else { return title }
+    let ellipsis = "…"
+    guard measuredWidth(of: ellipsis, font: font) <= maximumWidth else { return ellipsis }
+
+    var prefix = ""
+    for character in title {
+      let candidate = prefix + String(character) + ellipsis
+      guard measuredWidth(of: candidate, font: font) <= maximumWidth else { break }
+      prefix += String(character)
+    }
+    return prefix + ellipsis
+  }
+
+  static func measuredWidth(of title: String, font: NSFont) -> CGFloat {
+    (title as NSString).size(withAttributes: [.font: font]).width
   }
 }

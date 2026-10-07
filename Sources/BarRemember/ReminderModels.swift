@@ -602,6 +602,35 @@ enum MenuBarPinnedReminderPolicy {
   }
 }
 
+enum MenuBarPinnedTitleDisplayMode: String, CaseIterable, Identifiable, Sendable {
+  case iconOnly
+  case shortTitle
+  case longTitle
+
+  var id: String { rawValue }
+
+  static func resolved(
+    storedRawValue: String?,
+    legacyHidesPinnedTitle: Bool
+  ) -> Self {
+    if let storedRawValue, let mode = Self(rawValue: storedRawValue) {
+      return mode
+    }
+    return legacyHidesPinnedTitle ? .iconOnly : .shortTitle
+  }
+
+  func localizedTitle(language: AppLanguage) -> String {
+    switch self {
+    case .iconOnly:
+      language == .english ? "Icon only" : "아이콘만"
+    case .shortTitle:
+      language == .english ? "Short title" : "짧은 제목"
+    case .longTitle:
+      language == .english ? "Long title" : "긴 제목"
+    }
+  }
+}
+
 enum ReminderDueDateUpdate: Equatable, Sendable {
   case unchanged
   case remove

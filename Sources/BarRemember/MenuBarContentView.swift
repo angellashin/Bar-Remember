@@ -1715,18 +1715,33 @@ private struct ListSelectionView: View {
           Divider()
 
           VStack(alignment: .leading, spacing: 8) {
-            Text("메뉴바")
+            Text(AppLanguage.localized(korean: "메뉴바", english: "Menu bar"))
               .font(.caption)
               .foregroundStyle(BarRememberPalette.secondaryText)
-            Toggle(
-              "고정한 할 일 제목 숨기기",
-              isOn: Binding(
-                get: { store.hidesPinnedReminderTitle },
-                set: { store.setHidesPinnedReminderTitle($0) }
+            let language = AppLanguage.resolve(languageRawValue)
+            Picker(
+              AppLanguage.localized(korean: "고정한 할 일 표시", english: "Pinned reminder display"),
+              selection: Binding(
+                get: { store.pinnedReminderTitleDisplayMode },
+                set: { store.setPinnedReminderTitleDisplayMode($0) }
               )
-            )
-            .toggleStyle(.switch)
-            .foregroundStyle(BarRememberPalette.primaryText)
+            ) {
+              ForEach(MenuBarPinnedTitleDisplayMode.allCases) { displayMode in
+                Text(displayMode.localizedTitle(language: language)).tag(displayMode)
+              }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel(AppLanguage.localized(
+              korean: "고정한 할 일 표시 방식",
+              english: "Pinned reminder display mode"
+            ))
+            Text(AppLanguage.localized(
+              korean: "짧은 제목은 약 120pt, 긴 제목은 약 160pt까지 표시합니다. 메뉴바가 혼잡하면 다른 항목이 숨겨질 수 있습니다.",
+              english: "Short titles use up to about 120 pt and long titles up to about 160 pt. A crowded menu bar can still hide other items."
+            ))
+            .font(.caption2)
+            .foregroundStyle(BarRememberPalette.mutedText)
           }
 
           Divider()

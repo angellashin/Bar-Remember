@@ -30,7 +30,7 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 - Connect any Reminders list to a custom space such as Work, Study, Applications, or anything you choose.
 - Complete an item directly from the popover, with a short undo action when you clicked by mistake.
 - Add, edit, reorder, and delete due dates without opening the full Reminders app.
-- Detect clear date suffixes such as `CJ application deadline 9/28` or `Send proposal tomorrow` using deterministic rules, not AI.
+- Detect clear date suffixes such as `application deadline 9/28` or `Send proposal tomorrow` using deterministic rules, not AI.
 - Pin one reminder to the menu bar at a time. You can hide its title; long titles are shortened only in the menu bar, never in Reminders. Completing a pinned item unpins it and returns to the normal icon without automatically pinning another item.
 - Choose a completion-circle color and switch between System, Paper, Glass, and Midnight themes.
 - Glass uses a clear, behind-window material and a light border so the real desktop background softly shows through.

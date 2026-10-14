@@ -4,11 +4,11 @@ cask "barremember" do
 
   url "https://github.com/angellashin/Bar-Remember/releases/download/v#{version}/BarRemember-#{version}-macos-arm64.zip"
   name "BarRemember"
-  desc "Native macOS menu bar companion for Apple Reminders"
+  desc "Menu bar companion for Apple Reminders"
   homepage "https://github.com/angellashin/Bar-Remember"
 
-  depends_on macos: ">= :sonoma"
   depends_on arch: :arm64
+  depends_on macos: :sonoma
 
   app "BarRemember.app"
 end

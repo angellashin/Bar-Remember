@@ -11,7 +11,8 @@ RESOURCES_DIR="${CONTENTS_DIR}/Resources"
 BARREMEMBER_DEVELOPER_DIR="${DEVELOPER_DIR:-$(xcode-select -p)}"
 BARREMEMBER_XCODEBUILD="${BARREMEMBER_DEVELOPER_DIR}/usr/bin/xcodebuild"
 BARREMEMBER_SWIFT="$(env DEVELOPER_DIR="${BARREMEMBER_DEVELOPER_DIR}" xcrun --find swift)"
-BARREMEMBER_MODULE_CACHE="${PROJECT_DIR}/.build/ModuleCache"
+BARREMEMBER_BUILD_PATH="${BARREMEMBER_BUILD_PATH:-${PROJECT_DIR}/.build}"
+BARREMEMBER_MODULE_CACHE="${BARREMEMBER_BUILD_PATH}/ModuleCache"
 
 if [[ ! -x "${BARREMEMBER_XCODEBUILD}" ]]; then
   print -u2 "BarRemember requires a full Xcode 26.0+ installation."
@@ -34,9 +35,9 @@ env \
     "${BARREMEMBER_SWIFT}" build \
     --package-path "${PROJECT_DIR}" \
     --configuration release \
-    --scratch-path "${PROJECT_DIR}/.build"
+    --scratch-path "${BARREMEMBER_BUILD_PATH}"
 
-BIN_DIR="$(env DEVELOPER_DIR="${BARREMEMBER_DEVELOPER_DIR}" "${BARREMEMBER_SWIFT}" build --package-path "${PROJECT_DIR}" --configuration release --scratch-path "${PROJECT_DIR}/.build" --show-bin-path)"
+BIN_DIR="$(env DEVELOPER_DIR="${BARREMEMBER_DEVELOPER_DIR}" "${BARREMEMBER_SWIFT}" build --package-path "${PROJECT_DIR}" --configuration release --scratch-path "${BARREMEMBER_BUILD_PATH}" --show-bin-path)"
 
 cp "${BIN_DIR}/BarRemember" "${MACOS_DIR}/BarRemember"
 cp "${PROJECT_DIR}/Resources/Info.plist" "${CONTENTS_DIR}/Info.plist"

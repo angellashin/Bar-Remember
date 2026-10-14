@@ -60,6 +60,11 @@ notarized, so Gatekeeper may warn about or block the first launch. Do not disabl
 macOS security protections to run it; a notarized release requires a paid Apple
 Developer Program membership.
 
+Recent Homebrew versions require an explicit local trust decision before loading
+a third-party Cask. Review the public tap first; if you choose to trust it, run
+`brew trust angellashin/barremember` before the install command. This stores a
+local Homebrew trust setting and is not performed by BarRemember.
+
 To receive a later published Cask version:
 
 ```sh

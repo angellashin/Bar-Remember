@@ -1,11 +1,8 @@
-# LOCAL PUBLISHING TEMPLATE ONLY.
-# Replace the example.invalid URL and checksum with the values from the approved
-# public GitHub Release before placing this cask in a public tap.
 cask "barremember" do
   version "1.4.0"
-  sha256 "REPLACE_WITH_SHA256_FROM_RELEASE_ARCHIVE"
+  sha256 "00949e3caef5f08fb5f2268fd71a5d4b38dc8ba1da9ed08d7186ab1cef0fb783"
 
-  url "https://example.invalid/BarRemember-#{version}-macos-arm64.zip"
+  url "https://github.com/angellashin/Bar-Remember/releases/download/v#{version}/BarRemember-#{version}-macos-arm64.zip"
   name "BarRemember"
   desc "Native macOS menu bar companion for Apple Reminders"
   homepage "https://github.com/angellashin/Bar-Remember"

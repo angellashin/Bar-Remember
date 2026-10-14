@@ -47,6 +47,26 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 
 BarRemember requests Reminders access through EventKit on first launch. The app does not upload reminder data or require a separate service account.
 
+## Install with Homebrew (Apple Silicon)
+
+```sh
+brew tap angellashin/barremember
+brew install --cask barremember
+```
+
+The current Homebrew release supports Apple Silicon Macs running macOS 14 Sonoma
+or later. It is ad-hoc signed and is **not** Developer ID signed or Apple
+notarized, so Gatekeeper may warn about or block the first launch. Do not disable
+macOS security protections to run it; a notarized release requires a paid Apple
+Developer Program membership.
+
+To receive a later published Cask version:
+
+```sh
+brew update
+brew upgrade --cask barremember
+```
+
 ## Install from source
 
 ```sh

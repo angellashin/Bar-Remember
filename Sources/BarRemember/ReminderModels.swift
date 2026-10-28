@@ -218,6 +218,31 @@ struct ReminderItemSnapshot: Identifiable, Equatable, Sendable {
   let listID: String
   let listTitle: String
   let listTint: ListTint
+  let createdAt: Date?
+
+  init(
+    id: String,
+    title: String,
+    notes: String?,
+    dueDate: Date?,
+    hasTime: Bool,
+    priority: Int,
+    listID: String,
+    listTitle: String,
+    listTint: ListTint,
+    createdAt: Date? = nil
+  ) {
+    self.id = id
+    self.title = title
+    self.notes = notes
+    self.dueDate = dueDate
+    self.hasTime = hasTime
+    self.priority = priority
+    self.listID = listID
+    self.listTitle = listTitle
+    self.listTint = listTint
+    self.createdAt = createdAt
+  }
 
   static func displayOrder(_ lhs: Self, _ rhs: Self) -> Bool {
     switch (lhs.dueDate, rhs.dueDate) {
@@ -642,7 +667,7 @@ enum ReminderOrderPolicy {
     storedIDs: [ReminderItemSnapshot.ID],
     to reminders: [ReminderItemSnapshot]
   ) -> [ReminderItemSnapshot] {
-    let naturallySorted = reminders.sorted(by: ReminderItemSnapshot.displayOrder)
+    let naturallySorted = reminders.sorted(by: manualOrder)
     guard !storedIDs.isEmpty else { return naturallySorted }
 
     var remindersByID = Dictionary(
@@ -656,9 +681,22 @@ enum ReminderOrderPolicy {
     }
 
     ordered.append(
-      contentsOf: remindersByID.values.sorted(by: ReminderItemSnapshot.displayOrder)
+      contentsOf: remindersByID.values.sorted(by: manualOrder)
     )
     return ordered
+  }
+
+  private static func manualOrder(_ lhs: ReminderItemSnapshot, _ rhs: ReminderItemSnapshot) -> Bool {
+    switch (lhs.createdAt, rhs.createdAt) {
+    case (let left?, let right?) where left != right:
+      return left < right
+    case (_?, nil):
+      return true
+    case (nil, _?):
+      return false
+    default:
+      return ReminderItemSnapshot.displayOrder(lhs, rhs)
+    }
   }
 
   static func moving(
@@ -685,6 +723,55 @@ enum ReminderOrderPolicy {
   ) -> [ReminderItemSnapshot.ID] {
     var seen: Set<ReminderItemSnapshot.ID> = []
     return (visibleIDs + previousIDs).filter { seen.insert($0).inserted }
+  }
+}
+
+enum ReminderSortMode: String, CaseIterable, Identifiable, Sendable {
+  static let defaultsKey = "reminderSortMode"
+
+  case manual
+  case dueDate
+  case title
+
+  var id: String { rawValue }
+
+  func localizedTitle(language: AppLanguage) -> String {
+    switch self {
+    case .manual:
+      language == .english ? "Manual order" : "수동 순서"
+    case .dueDate:
+      language == .english ? "Due date" : "날짜순"
+    case .title:
+      language == .english ? "Title A–Z" : "가나다순"
+    }
+  }
+
+  static func resolve(_ rawValue: String) -> Self {
+    Self(rawValue: rawValue) ?? .manual
+  }
+
+  func sorting(_ reminders: [ReminderItemSnapshot]) -> [ReminderItemSnapshot] {
+    switch self {
+    case .manual:
+      reminders
+    case .dueDate:
+      reminders.sorted { lhs, rhs in
+        switch (lhs.dueDate, rhs.dueDate) {
+        case (let left?, let right?) where left != right:
+          return left < right
+        case (_?, nil):
+          return true
+        case (nil, _?):
+          return false
+        default:
+          return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+        }
+      }
+    case .title:
+      reminders.sorted {
+        $0.title.localizedStandardCompare($1.title) == .orderedAscending
+      }
+    }
   }
 }
 

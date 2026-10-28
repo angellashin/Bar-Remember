@@ -29,7 +29,8 @@ It is intentionally focused: no account, no server, no analytics, and no replace
 - Native SwiftUI/AppKit menu bar app with no Dock icon.
 - Connect any Reminders list to a custom space such as Work, Study, Applications, or anything you choose.
 - Complete an item directly from the popover, with a short undo action when you clicked by mistake.
-- Add, edit, reorder, and delete due dates without opening the full Reminders app.
+- Add and edit reminders with keyboard shortcuts, including system clipboard copy and paste.
+- Reorder reminders manually, or sort by due date and title. New reminders appear at the bottom in the default manual order.
 - Detect clear date suffixes such as `application deadline 9/28` or `Send proposal tomorrow` using deterministic rules, not AI.
 - Pin one reminder to the menu bar at a time, then unpin it from the reminder row or the pinned banner. Choose **Icon only**, **Short title** (up to about 120 pt), or **Long title** (up to about 160 pt); shortening affects only the menu bar, never the reminder in Apple Reminders. Completing a pinned item unpins it and returns to the normal icon without automatically pinning another item.
 - Choose a completion-circle color and switch between System, Paper, Glass, and Midnight themes.
@@ -94,7 +95,7 @@ swift test
 
 1. EventKit reads incomplete reminders and their due dates from the selected lists.
 2. BarRemember groups connected lists into user-named spaces and stores that mapping in `UserDefaults`.
-3. Manual ordering is stored locally because EventKit does not expose an arbitrary custom order for Reminders items.
+3. Manual ordering is stored locally because EventKit does not expose an arbitrary custom order for Reminders items. The default follows creation order, while optional due-date and title sorting only changes how items are shown.
 4. Changes made in BarRemember are written back to Apple Reminders immediately.
 
 The date parser is a small, predictable rules engine. It recognizes explicit numeric dates (`9/28`, `2026-09-28`) and the relative suffixes `today`, `tomorrow`, `day after tomorrow`, `오늘`, `내일`, and `모레`. It does not call an AI model.

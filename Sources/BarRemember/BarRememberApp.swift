@@ -34,9 +34,41 @@ final class BarRememberAppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     configureStatusItem()
+    configureEditMenu()
     configurePopover()
     observeReminderCount()
     installOutsideClickMonitor()
+  }
+
+  private func configureEditMenu() {
+    let menu = NSApplication.shared.mainMenu ?? NSMenu()
+    let editTitle = AppLanguage.localized(korean: "편집", english: "Edit")
+    let editItem = NSMenuItem(title: editTitle, action: nil, keyEquivalent: "")
+    let editMenu = NSMenu(title: editTitle)
+    let commands: [(String, Selector, String)] = [
+      ("잘라내기", #selector(NSText.cut(_:)), "x"),
+      ("복사", #selector(NSText.copy(_:)), "c"),
+      ("붙이기", #selector(NSText.paste(_:)), "v"),
+      ("전체 선택", #selector(NSText.selectAll(_:)), "a"),
+    ]
+    for (koreanTitle, action, key) in commands {
+      let englishTitle: String
+      switch key {
+      case "x": englishTitle = "Cut"
+      case "c": englishTitle = "Copy"
+      case "v": englishTitle = "Paste"
+      default: englishTitle = "Select All"
+      }
+      let item = NSMenuItem(
+        title: AppLanguage.localized(korean: koreanTitle, english: englishTitle),
+        action: action,
+        keyEquivalent: key
+      )
+      editMenu.addItem(item)
+    }
+    editItem.submenu = editMenu
+    menu.addItem(editItem)
+    NSApplication.shared.mainMenu = menu
   }
 
   func applicationWillTerminate(_ notification: Notification) {

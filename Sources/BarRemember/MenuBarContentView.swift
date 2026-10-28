@@ -37,6 +37,8 @@ struct MenuBarContentView: View {
     BarRememberTheme.system.rawValue
   @AppStorage(AppLanguage.defaultsKey) private var languageRawValue =
     AppLanguage.korean.rawValue
+  @AppStorage(ReminderSortMode.defaultsKey) private var sortModeRawValue =
+    ReminderSortMode.manual.rawValue
   @AppStorage(ReminderSection.defaultsKey) private var selectedSectionRawValue =
     ReminderSection.tasks.id
   @State private var isShowingListSelection = false
@@ -239,6 +241,10 @@ struct MenuBarContentView: View {
           .padding(.horizontal, 14)
           .padding(.vertical, 12)
 
+        sortPicker
+          .padding(.horizontal, 16)
+          .padding(.bottom, 6)
+
         if visibleReminders.isEmpty && !store.isLoading {
           EmptyRemindersView(section: selectedSection)
         } else {
@@ -251,6 +257,7 @@ struct MenuBarContentView: View {
                   iconColor: selectedIconColor.color,
                   itemKindLabel: selectedSection.displayTitle,
                   completionActionTitle: AppLanguage.localized(korean: "완료", english: "Complete"),
+                  allowsDragging: selectedSortMode == .manual,
                   interactionsDisabled: editingReminderID != nil
                     || !store.updatingReminderIDs.isEmpty,
                   isEditing: editingReminderID == item.id,
@@ -315,6 +322,34 @@ struct MenuBarContentView: View {
       isSubmitting: isAddingReminder,
       submit: addReminder
     )
+  }
+
+  private var sortPicker: some View {
+    Menu {
+      ForEach(ReminderSortMode.allCases) { mode in
+        Button {
+          sortModeRawValue = mode.rawValue
+        } label: {
+          if selectedSortMode == mode {
+            Label(mode.localizedTitle(language: selectedLanguage), systemImage: "checkmark")
+          } else {
+            Text(mode.localizedTitle(language: selectedLanguage))
+          }
+        }
+      }
+    } label: {
+      Label(
+        selectedSortMode.localizedTitle(language: selectedLanguage),
+        systemImage: "arrow.up.arrow.down"
+      )
+      .font(.caption)
+      .foregroundStyle(BarRememberPalette.secondaryText)
+    }
+    .menuStyle(.borderlessButton)
+    .fixedSize()
+    .frame(maxWidth: .infinity, alignment: .trailing)
+    .help(AppLanguage.localized(korean: "항목 정렬 방식", english: "Sort items"))
+    .accessibilityLabel(AppLanguage.localized(korean: "항목 정렬", english: "Sort items"))
   }
 
   private var footer: some View {
@@ -411,7 +446,15 @@ struct MenuBarContentView: View {
   }
 
   private var visibleReminders: [ReminderItemSnapshot] {
-    store.reminders(for: selectedSection)
+    selectedSortMode.sorting(store.reminders(for: selectedSection))
+  }
+
+  private var selectedSortMode: ReminderSortMode {
+    ReminderSortMode.resolve(sortModeRawValue)
+  }
+
+  private var selectedLanguage: AppLanguage {
+    AppLanguage.resolve(languageRawValue)
   }
 
   private var quickAddPlaceholder: String {
@@ -1260,7 +1303,9 @@ struct ReminderRow: View {
         .help("\(itemKindLabel) 수정")
         .accessibilityLabel("수정: \(item.title)")
 
-        dragHandle
+        if allowsDragging {
+          dragHandle
+        }
       }
     }
   }

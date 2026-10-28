@@ -655,6 +655,43 @@ struct ReminderModelsTests {
     #expect(ordered.map(\.id) == ["later", "earlier"])
   }
 
+  @Test func manualOrderUsesCreationDateAndLeavesNewItemsAtTheBottom() {
+    let now = Date()
+    let older = item(id: "older", title: "Older", dueDate: nil, createdAt: now)
+    let newer = item(
+      id: "newer",
+      title: "Newer",
+      dueDate: nil,
+      createdAt: now.addingTimeInterval(60)
+    )
+
+    let initial = ReminderOrderPolicy.applying(storedIDs: [], to: [newer, older])
+    let afterAdding = ReminderOrderPolicy.applying(
+      storedIDs: [older.id],
+      to: [newer, older]
+    )
+
+    #expect(initial.map(\.id) == ["older", "newer"])
+    #expect(afterAdding.map(\.id) == ["older", "newer"])
+  }
+
+  @Test func optionalSortModesOrderByDueDateAndKoreanTitle() {
+    let firstDate = Date(timeIntervalSince1970: 1_800_000_000)
+    let later = item(id: "later", title: "나중", dueDate: firstDate.addingTimeInterval(60))
+    let earlier = item(id: "earlier", title: "가나다", dueDate: firstDate)
+    let undated = item(id: "undated", title: "다라마바사", dueDate: nil)
+
+    #expect(
+      ReminderSortMode.dueDate.sorting([later, undated, earlier]).map(\.id)
+        == ["earlier", "later", "undated"]
+    )
+    #expect(
+      ReminderSortMode.title.sorting([later, undated, earlier]).map(\.id)
+        == ["earlier", "later", "undated"]
+    )
+    #expect(ReminderSortMode.manual.sorting([later, earlier]).map(\.id) == ["later", "earlier"])
+  }
+
   @Test func newItemsAppendInNaturalOrderAfterStoredItems() {
     let now = Date()
     let manual = item(id: "manual", title: "Manual", dueDate: nil)
@@ -813,7 +850,12 @@ struct ReminderModelsTests {
     #expect(manuallyRestored.map(\.id) == ["first", "restored", "last"])
   }
 
-  private func item(id: String, title: String, dueDate: Date?) -> ReminderItemSnapshot {
+  private func item(
+    id: String,
+    title: String,
+    dueDate: Date?,
+    createdAt: Date? = nil
+  ) -> ReminderItemSnapshot {
     ReminderItemSnapshot(
       id: id,
       title: title,
@@ -823,7 +865,8 @@ struct ReminderModelsTests {
       priority: 0,
       listID: "list",
       listTitle: "List",
-      listTint: .accent
+      listTint: .accent,
+      createdAt: createdAt
     )
   }
 

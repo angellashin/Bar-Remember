@@ -406,6 +406,14 @@ final class ReminderStore: ObservableObject {
 
     do {
       try eventStore.save(reminder, commit: true)
+      manualReminderOrderIDs = ReminderOrderPolicy.storedIDs(
+        visibleIDs: reminders.map(\.id),
+        preserving: manualReminderOrderIDs
+      )
+      if !manualReminderOrderIDs.contains(reminder.calendarItemIdentifier) {
+        manualReminderOrderIDs.append(reminder.calendarItemIdentifier)
+      }
+      defaults.set(manualReminderOrderIDs, forKey: reminderOrderIDsKey)
       await reload()
       return true
     } catch {
@@ -786,7 +794,8 @@ final class ReminderStore: ObservableObject {
       priority: reminder.priority,
       listID: calendar.calendarIdentifier,
       listTitle: calendar.title,
-      listTint: tint(from: calendar.cgColor)
+      listTint: tint(from: calendar.cgColor),
+      createdAt: reminder.creationDate
     )
   }
 

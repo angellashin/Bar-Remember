@@ -7,6 +7,49 @@ import Testing
 
 @MainActor
 struct NativeTextFieldInteractionTests {
+  @Test func swiftUITextFieldAcceptsPasteFromTheSystemPasteboard() throws {
+    let model = TitleEditorHarnessModel()
+    let host = NSHostingController(rootView: TitleEditorHarness(model: model))
+    let window = NSWindow(
+      contentRect: NSRect(x: -10_000, y: -10_000, width: 280, height: 48),
+      styleMask: [.borderless],
+      backing: .buffered,
+      defer: false
+    )
+    window.contentViewController = host
+    window.orderFrontRegardless()
+    defer { window.orderOut(nil) }
+
+    let pasteboard = NSPasteboard.general
+    let originalItems = pasteboard.pasteboardItems?.compactMap { item -> NSPasteboardItem? in
+      let copy = NSPasteboardItem()
+      for type in item.types {
+        if let data = item.data(forType: type) {
+          copy.setData(data, forType: type)
+        }
+      }
+      return copy.types.isEmpty ? nil : copy
+    } ?? []
+    defer {
+      pasteboard.clearContents()
+      if !originalItems.isEmpty {
+        pasteboard.writeObjects(originalItems)
+      }
+    }
+
+    pasteboard.clearContents()
+    pasteboard.setString("Pasted from clipboard", forType: .string)
+    RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+    let field = try #require(firstTextField(in: host.view))
+    window.makeFirstResponder(field)
+    let editor = try #require(field.currentEditor() as? NSTextView)
+    editor.selectAll(nil)
+    editor.paste(nil)
+    RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+
+    #expect(model.title == "Pasted from clipboard")
+  }
+
   @Test func swiftUITextFieldAcceptsReplacementDeletionAndKoreanComposition() throws {
     let model = TitleEditorHarnessModel()
     let host = NSHostingController(rootView: TitleEditorHarness(model: model))
